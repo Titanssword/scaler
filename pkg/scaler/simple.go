@@ -17,11 +17,12 @@ import (
 	"container/list"
 	"context"
 	"fmt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"log"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/AliyunContainerService/scaler/pkg/config"
 	"github.com/AliyunContainerService/scaler/pkg/model"
@@ -152,6 +153,9 @@ func (s *Simple) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleRep
 	}()
 	//log.Printf("Idle, request id: %s", request.Assigment.RequestId)
 	needDestroy := false
+	if s.idleInstance.Len() > 3 {
+		needDestroy = true
+	}
 	slotId := ""
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true

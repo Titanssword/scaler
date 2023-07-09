@@ -51,7 +51,7 @@ func (m *Manager) GetOrCreate(metaData *model.Meta) scaler.Scaler {
 		return scheduler
 	}
 	log.Printf("Create new scaler for app %s", metaData.Key)
-	scheduler := scaler.New(metaData, m.config)
+	scheduler := scaler.NewV2(metaData, m.config)
 	m.schedulers[metaData.Key] = scheduler
 	m.rw.Unlock()
 	return scheduler

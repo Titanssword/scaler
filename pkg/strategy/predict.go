@@ -3,8 +3,10 @@ package strategy
 import "context"
 
 type Seer struct {
+	// 当前请求时间
 	CurrentTime int64
-	CurrentQPS  int64
+	// 最近一分钟的时间
+	CurrentQPS []int64
 }
 
 type God interface {
