@@ -207,13 +207,13 @@ func (s *Simple) gcLoop() {
 			if element := s.idleInstance.Back(); element != nil {
 				instance := element.Value.(*model.Instance)
 				idleDuration := time.Now().Sub(instance.LastIdleTime)
-				if idleDuration > s.config.IdleDurationBeforeGC {
+				if idleDuration > *s.config.IdleDurationBeforeGC {
 					//need GC
 					s.idleInstance.Remove(element)
 					delete(s.instances, instance.Id)
 					s.mu.Unlock()
 					go func() {
-						reason := fmt.Sprintf("Idle duration: %fs, excceed configured duration: %fs", idleDuration.Seconds(), s.config.IdleDurationBeforeGC.Seconds())
+						reason := fmt.Sprintf("Idle duration: %fs, excceed configured duration: %fs", idleDuration.Seconds(), (*s.config.IdleDurationBeforeGC).Seconds())
 						ctx := context.Background()
 						ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 						defer cancel()
