@@ -10,10 +10,22 @@ type Seer struct {
 }
 
 type God interface {
-	predictQPSIncrese(ctx context.Context) bool
+	PredictQPSIncrese(ctx context.Context) bool
 }
 
-func (s *Seer) predictQPSIncrese(ctx context.Context) bool {
+func (s *Seer) PredictQPSIncrese(ctx context.Context) bool {
+	// 计算整个数组的差值
+	diff := s.CurrentQPS[len(s.CurrentQPS)-1] - s.CurrentQPS[0]
+	midDiff := s.CurrentQPS[len(s.CurrentQPS)-1] - s.CurrentQPS[0+(len(s.CurrentQPS)-1)/2]
+	if diff > 0 {
+		return true
+	} else {
+		if midDiff > 0 {
+			return true
+		} else {
+			return false
+		}
+	}
 	// 1. 历史数据分析
-	return true
+	// return true
 }

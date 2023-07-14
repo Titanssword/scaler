@@ -11,6 +11,7 @@ import (
 	"github.com/AliyunContainerService/scaler/pkg/config"
 	"github.com/AliyunContainerService/scaler/pkg/model"
 	"github.com/AliyunContainerService/scaler/pkg/platform_client"
+	"github.com/AliyunContainerService/scaler/pkg/strategy"
 	pb "github.com/AliyunContainerService/scaler/proto"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -25,6 +26,8 @@ type Try struct {
 	wg             sync.WaitGroup
 	instances      map[string]*model.Instance
 	idleInstance   *list.List
+	qpsList        []int64 // qps list
+	startPoint     int64   // 20230601 1685548800 以来的
 }
 
 func NewV2(metaData *model.Meta, config *config.Config) Scaler {
@@ -40,6 +43,8 @@ func NewV2(metaData *model.Meta, config *config.Config) Scaler {
 		wg:             sync.WaitGroup{},
 		instances:      make(map[string]*model.Instance),
 		idleInstance:   list.New(),
+		qpsList:        make([]int64, 100000000),
+		startPoint:     1685548800,
 	}
 	log.Printf("New scaler for app: %s is created", metaData.Key)
 	scheduler.wg.Add(1)
@@ -54,6 +59,13 @@ func NewV2(metaData *model.Meta, config *config.Config) Scaler {
 func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.AssignReply, error) {
 	start := time.Now()
 	instanceId := uuid.New().String()
+
+	// 记录qps，加锁
+	requestTime := start.Unix()
+	s.mu.Lock()
+	s.qpsList[requestTime/1000-s.startPoint] = s.qpsList[requestTime/1000-(s.startPoint)] + 1
+	s.mu.Unlock()
+
 	defer func() {
 		log.Printf("Assign, request id: %s, instance id: %s, cost %dms", request.RequestId, instanceId, time.Since(start).Milliseconds())
 	}()
@@ -139,6 +151,16 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	//log.Printf("Idle, request id: %s", request.Assigment.RequestId)
 	needDestroy := false
 	slotId := ""
+
+	// 预测qps逻辑
+	seer := &strategy.Seer{
+		CurrentQPS: s.qpsList[start.Unix()-s.startPoint-60 : start.Unix()-s.startPoint],
+	}
+	increase := seer.PredictQPSIncrese(ctx)
+	if !increase {
+		needDestroy = true
+	}
+
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
 	}
