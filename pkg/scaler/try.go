@@ -3,6 +3,7 @@ package scaler
 import (
 	"container/list"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -27,7 +28,7 @@ type Try struct {
 	instances      map[string]*model.Instance
 	idleInstance   *list.List
 	qpsList        []int64 // qps list
-	startPoint     int64   // 20230601 1685548800 以来的
+	startPoint     int64   // 20230601 1685548800 以来的 1683859454
 }
 
 func NewV2(metaData *model.Meta, config *config.Config) Scaler {
@@ -44,7 +45,7 @@ func NewV2(metaData *model.Meta, config *config.Config) Scaler {
 		instances:      make(map[string]*model.Instance),
 		idleInstance:   list.New(),
 		qpsList:        make([]int64, 100000000),
-		startPoint:     1685548800,
+		startPoint:     1680278400,
 	}
 	log.Printf("New scaler for app: %s is created", metaData.Key)
 	scheduler.wg.Add(1)
@@ -62,8 +63,10 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 
 	// 记录qps，加锁
 	requestTime := start.Unix()
+	jsonString, _ := json.Marshal(request)
+	log.Printf("Assign, request time: %s, request: %s", start, jsonString)
 	s.mu.Lock()
-	s.qpsList[requestTime/1000-s.startPoint] = s.qpsList[requestTime/1000-(s.startPoint)] + 1
+	s.qpsList[requestTime-(s.startPoint)] = s.qpsList[requestTime-(s.startPoint)] + 1
 	s.mu.Unlock()
 
 	defer func() {
