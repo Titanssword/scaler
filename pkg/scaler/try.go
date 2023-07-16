@@ -159,8 +159,10 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	seer := &strategy.Seer{
 		CurrentQPS: s.qpsList[start.Unix()-s.startPoint-60 : start.Unix()-s.startPoint],
 	}
+	jsonString, _ := json.Marshal(seer)
+	log.Printf("Ide, seer: %v", jsonString)
 	increase := seer.PredictQPSIncrese(ctx)
-	if !increase {
+	if !increase && s.idleInstance.Len() > 3 {
 		needDestroy = true
 	}
 
