@@ -32,3 +32,8 @@ type Instance struct {
 	Busy             bool
 	LastIdleTime     time.Time
 }
+
+type QpsEntity struct {
+	CurrentTime int64
+	QPS         int
+}

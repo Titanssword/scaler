@@ -13,7 +13,14 @@ limitations under the License.
 
 package config
 
-import "time"
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+)
 
 type Config struct {
 	ClientAddr           string
@@ -28,3 +35,60 @@ var DefaultConfig = Config{
 }
 
 var BeforeGC time.Duration = 5 * time.Minute
+
+var GlobalMetaKey1 = []string{"nodes1", "roles1", "rolebindings1", "certificatesigningrequests1", "binding1", "csinodes1"}
+
+var GlobalMetaKey2 = []string{"nodes2", "roles2", "rolebindings2", "certificatesigningrequests2", "binding2", "csinodes2"}
+
+var Meta1Duration = map[string]float32{
+	"certificatesigningrequests1": 29.958949,
+	"csinodes1":                   30.000000,
+	"nodes1":                      56.263234,
+	"rolebindings1":               28.868354,
+	"roles1":                      29.578194,
+}
+
+var Meta2Duration = map[string]float32{
+	"certificatesigningrequests2": 29.958949,
+	"csinodes2":                   30.000000,
+	"nodes2":                      56.263234,
+	"rolebindings2":               28.868354,
+	"roles2":                      29.578194,
+}
+
+var Meta3Duration map[string]float64
+
+func LoadData3() {
+	// Open the file
+	file, err := os.Open("../../data/data_analyis/averages.csv")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer file.Close()
+
+	// Read the file line by line
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.Split(line, ",")
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+			if err == nil {
+				Meta3Duration[key] = value
+			}
+		}
+	}
+
+	// Check for scanner errors
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error reading file:", err)
+		return
+	}
+
+	// Print the map
+	for key, value := range Meta3Duration {
+		fmt.Printf("%s: %f\n", key, value)
+	}
+}

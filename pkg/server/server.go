@@ -32,6 +32,7 @@ type Server struct {
 }
 
 func New() *Server {
+	config.LoadData3()
 	return &Server{
 		mgr: manager.New(&config.DefaultConfig),
 	}

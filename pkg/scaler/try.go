@@ -12,7 +12,6 @@ import (
 	"github.com/AliyunContainerService/scaler/pkg/config"
 	"github.com/AliyunContainerService/scaler/pkg/model"
 	"github.com/AliyunContainerService/scaler/pkg/platform_client"
-	"github.com/AliyunContainerService/scaler/pkg/strategy"
 	pb "github.com/AliyunContainerService/scaler/proto"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -27,8 +26,10 @@ type Try struct {
 	wg             sync.WaitGroup
 	instances      map[string]*model.Instance
 	idleInstance   *list.List
-	qpsList        []int64 // qps list
-	startPoint     int64   // 20230601 1685548800 以来的 1683859454
+	// qpsList        []int64    // qps list
+	// startPoint     int64      // 20230601 1685548800 以来的 1683859454
+	qpsEntityList *list.List // 最近5min的qps，len=300
+	// qpsEntityMap   map[int64]*model.QpsEntity 1683859454
 }
 
 func NewV2(metaData *model.Meta, config *config.Config) Scaler {
@@ -44,8 +45,9 @@ func NewV2(metaData *model.Meta, config *config.Config) Scaler {
 		wg:             sync.WaitGroup{},
 		instances:      make(map[string]*model.Instance),
 		idleInstance:   list.New(),
-		qpsList:        make([]int64, 100000000),
-		startPoint:     1680278400,
+		// qpsList:        make([]int64, 100000000),
+		// startPoint:     1680278400,
+		qpsEntityList: list.New(),
 	}
 	log.Printf("New scaler for app: %s is created", metaData.Key)
 	scheduler.wg.Add(1)
@@ -66,7 +68,37 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	jsonString, _ := json.Marshal(request)
 	log.Printf("Assign, request time: %s, request: %s", start, jsonString)
 	s.mu.Lock()
-	s.qpsList[requestTime-(s.startPoint)] = s.qpsList[requestTime-(s.startPoint)] + 1
+	// qps 累加逻辑
+	if s.qpsEntityList.Len() == 0 {
+		tmp := &model.QpsEntity{
+			CurrentTime: requestTime,
+			QPS:         1,
+		}
+		s.qpsEntityList.PushBack(tmp)
+	} else {
+		cur := s.qpsEntityList.Back().Value.(*model.QpsEntity)
+		if cur != nil {
+			if cur.CurrentTime == requestTime {
+				cur.QPS = cur.QPS + 1
+			} else {
+				tmp := &model.QpsEntity{
+					CurrentTime: requestTime,
+					QPS:         1,
+				}
+				s.qpsEntityList.PushBack(tmp)
+			}
+		} else {
+			tmp := &model.QpsEntity{
+				CurrentTime: requestTime,
+				QPS:         1,
+			}
+			s.qpsEntityList.PushBack(tmp)
+		}
+	}
+	// 删除多余元素，位置5min的时间窗口
+	if s.qpsEntityList.Len() > 300 {
+		s.qpsEntityList.Remove(s.qpsEntityList.Front())
+	}
 	s.mu.Unlock()
 
 	defer func() {
@@ -138,6 +170,15 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	}, nil
 }
 
+func contains(arr []string, target string) bool {
+	for _, element := range arr {
+		if element == target {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply, error) {
 	if request.Assigment == nil {
 		return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("assignment is nil"))
@@ -149,21 +190,68 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	start := time.Now()
 	instanceId := request.Assigment.InstanceId
 	defer func() {
-		log.Printf("Idle, request id: %s, instance: %s, cost %dus", request.Assigment.RequestId, instanceId, time.Since(start).Microseconds())
+		log.Printf("Idle, request id: %s, instance: %s, cost %dus, data3Duration: %s", request.Assigment.RequestId, instanceId, time.Since(start).Microseconds(), len(config.Meta3Duration))
 	}()
-	//log.Printf("Idle, request id: %s", request.Assigment.RequestId)
+	// jsonStringIdle, _ := json.Marshal(request)
+	// log.Printf("Idle, request: %v", jsonStringIdle)
 	needDestroy := false
 	slotId := ""
 
-	// 预测qps逻辑
-	seer := &strategy.Seer{
-		CurrentQPS: s.qpsList[start.Unix()-s.startPoint-60 : start.Unix()-s.startPoint],
+	// 针对数据集1 做优化
+	if contains(config.GlobalMetaKey1, request.Assigment.MetaKey) {
+		// 预测qps逻辑
+		// seer := &strategy.Seer{
+		// 	CurrentQPS: s.qpsList[start.Unix()-s.startPoint-60 : start.Unix()-s.startPoint],
+		// }
+		// jsonStringSeer, _ := json.Marshal(seer)
+		// log.Printf("Ilde, seer: %v", jsonStringSeer)
+		// increase := seer.PredictQPSIncrese(ctx)
+		// if !increase && s.idleInstance.Len() > 2 {
+		// 	needDestroy = true
+		// }
+		requestTime := start.Unix()
+		if s.qpsEntityList.Len() != 0 {
+			cur := s.qpsEntityList.Back().Value.(*model.QpsEntity)
+			if cur != nil {
+				if cur.CurrentTime <= requestTime {
+					balancePodNums := cur.QPS * int(1/config.Meta1Duration[request.Assigment.MetaKey])
+					if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 1 {
+						needDestroy = true
+					}
+				}
+			}
+		}
 	}
-	jsonString, _ := json.Marshal(seer)
-	log.Printf("Ide, seer: %v", jsonString)
-	increase := seer.PredictQPSIncrese(ctx)
-	if !increase && s.idleInstance.Len() > 3 {
-		needDestroy = true
+	// 针对数据集2 做优化
+	if contains(config.GlobalMetaKey2, request.Assigment.MetaKey) {
+		requestTime := start.Unix()
+		if s.qpsEntityList.Len() != 0 {
+			cur := s.qpsEntityList.Back().Value.(*model.QpsEntity)
+			if cur != nil {
+				if cur.CurrentTime <= requestTime {
+					balancePodNums := cur.QPS * int(1/config.Meta2Duration[request.Assigment.MetaKey])
+					if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 1 {
+						needDestroy = true
+					}
+				}
+			}
+		}
+	}
+	// 针对数据集3 做优化
+	data3Duration, ok := config.Meta3Duration[request.Assigment.MetaKey]
+	if ok {
+		requestTime := start.Unix()
+		if s.qpsEntityList.Len() != 0 {
+			cur := s.qpsEntityList.Back().Value.(*model.QpsEntity)
+			if cur != nil {
+				if cur.CurrentTime <= requestTime {
+					balancePodNums := cur.QPS * int(1/data3Duration)
+					if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 1 {
+						needDestroy = true
+					}
+				}
+			}
+		}
 	}
 
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
