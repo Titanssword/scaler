@@ -66,7 +66,11 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	} else if strings.HasSuffix(request.MetaData.Key, "2") {
 		*s.config.IdleDurationBeforeGC = 7 * time.Minute
 	} else {
-		*s.config.IdleDurationBeforeGC = 8500 * time.Millisecond
+		if request.MetaData.MemoryInMb > 1000 {
+			*s.config.IdleDurationBeforeGC = 5 * time.Second
+		} else {
+			*s.config.IdleDurationBeforeGC = 10 * time.Second
+		}
 	}
 
 	if element := s.idleInstance.Front(); element != nil {
