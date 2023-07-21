@@ -27,4 +27,4 @@ var DefaultConfig = Config{
 	IdleDurationBeforeGC: &BeforeGC,
 }
 
-var BeforeGC time.Duration = 5 * time.Minute
+var BeforeGC = 5 * time.Minute

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,6 +60,15 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	}()
 	log.Printf("Assign, request id: %s", request.RequestId)
 	s.mu.Lock()
+
+	if strings.HasSuffix(request.MetaData.Key, "1") {
+		*s.config.IdleDurationBeforeGC = 5 * time.Minute
+	} else if strings.HasSuffix(request.MetaData.Key, "2") {
+		*s.config.IdleDurationBeforeGC = 7 * time.Minute
+	} else {
+		*s.config.IdleDurationBeforeGC = 8500 * time.Millisecond
+	}
+
 	if element := s.idleInstance.Front(); element != nil {
 		instance := element.Value.(*model.Instance)
 		instance.Busy = true
