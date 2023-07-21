@@ -63,7 +63,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 
 	if strings.HasSuffix(request.MetaData.Key, "1") {
 		*s.config.IdleDurationBeforeGC = 5 * time.Minute
-	} else if strings.HasSuffix(request.MetaData.Key, "2") {
+	} else if strings.HasSuffix(request.MetaData.Key, "2") || request.MetaData.Runtime == "go" {
 		*s.config.IdleDurationBeforeGC = 7 * time.Minute
 	} else {
 		*s.config.IdleDurationBeforeGC = 8500 * time.Millisecond
