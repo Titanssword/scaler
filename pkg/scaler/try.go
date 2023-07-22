@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -61,9 +60,9 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	log.Printf("Assign, request id: %s", request.RequestId)
 	s.mu.Lock()
 
-	if strings.HasSuffix(request.MetaData.Key, "1") {
+	if config.Contains(config.GlobalMetaKey1, request.MetaData.Key) {
 		*s.config.IdleDurationBeforeGC = 5 * time.Minute
-	} else if strings.HasSuffix(request.MetaData.Key, "2") || request.MetaData.Runtime == "go" {
+	} else if config.Contains(config.GlobalMetaKey2, request.MetaData.Key) {
 		*s.config.IdleDurationBeforeGC = 7 * time.Minute
 	} else {
 		*s.config.IdleDurationBeforeGC = 8500 * time.Millisecond

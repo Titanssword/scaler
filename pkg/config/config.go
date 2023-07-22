@@ -23,8 +23,21 @@ type Config struct {
 
 var DefaultConfig = Config{
 	ClientAddr:           "127.0.0.1:50051",
-	GcInterval:           8500 * time.Millisecond,
+	GcInterval:           5 * time.Second,
 	IdleDurationBeforeGC: &BeforeGC,
 }
 
 var BeforeGC = 5 * time.Minute
+
+var GlobalMetaKey1 = []string{"nodes1", "roles1", "rolebindings1", "certificatesigningrequests1", "binding1", "csinodes1"}
+
+var GlobalMetaKey2 = []string{"nodes2", "roles2", "rolebindings2", "certificatesigningrequests2", "binding2", "csinodes2"}
+
+func Contains(arr []string, target string) bool {
+	for _, element := range arr {
+		if element == target {
+			return true
+		}
+	}
+	return false
+}
