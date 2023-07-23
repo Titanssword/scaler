@@ -27,13 +27,13 @@ type Try struct {
 	idleInstance   *list.List
 }
 
-func NewV2(metaData *model.Meta, config *config.Config) Scaler {
-	client, err := platform_client.New(config.ClientAddr)
+func NewV2(metaData *model.Meta, c *config.Config) Scaler {
+	client, err := platform_client.New(c.ClientAddr)
 	if err != nil {
 		log.Fatalf("client init with error: %s", err.Error())
 	}
 	scheduler := &Try{
-		config:         config,
+		config:         c,
 		metaData:       metaData,
 		platformClient: client,
 		mu:             sync.Mutex{},
@@ -41,6 +41,29 @@ func NewV2(metaData *model.Meta, config *config.Config) Scaler {
 		instances:      make(map[string]*model.Instance),
 		idleInstance:   list.New(),
 	}
+
+	if config.Contains(config.GlobalMetaKey1, metaData.Key) {
+		if metaData.MemoryInMb <= 256 {
+			*scheduler.config.IdleDurationBeforeGC = 1 * time.Minute
+		} else {
+			*scheduler.config.IdleDurationBeforeGC = 10 * time.Minute
+		}
+	} else if config.Contains(config.GlobalMetaKey2, metaData.Key) {
+		if metaData.MemoryInMb <= 256 {
+			*scheduler.config.IdleDurationBeforeGC = 3 * time.Minute
+		} else {
+			*scheduler.config.IdleDurationBeforeGC = 10 * time.Minute
+		}
+	} else {
+		if metaData.MemoryInMb <= 512 {
+			*scheduler.config.IdleDurationBeforeGC = 3 * time.Second
+		} else if metaData.MemoryInMb <= 1024 {
+			*scheduler.config.IdleDurationBeforeGC = 10 * time.Second
+		} else {
+			*scheduler.config.IdleDurationBeforeGC = 3 * time.Minute
+		}
+	}
+
 	log.Printf("New scaler for app: %s is created", metaData.Key)
 	scheduler.wg.Add(1)
 	go func() {
@@ -59,15 +82,6 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	}()
 	log.Printf("Assign, request id: %s", request.RequestId)
 	s.mu.Lock()
-
-	if config.Contains(config.GlobalMetaKey1, request.MetaData.Key) {
-		*s.config.IdleDurationBeforeGC = 5 * time.Minute
-	} else if config.Contains(config.GlobalMetaKey2, request.MetaData.Key) {
-		*s.config.IdleDurationBeforeGC = 7 * time.Minute
-	} else {
-		*s.config.IdleDurationBeforeGC = 8500 * time.Millisecond
-	}
-
 	if element := s.idleInstance.Front(); element != nil {
 		instance := element.Value.(*model.Instance)
 		instance.Busy = true
