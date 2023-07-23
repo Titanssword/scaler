@@ -46,19 +46,19 @@ func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 		if metaData.MemoryInMb <= 256 {
 			*scheduler.config.IdleDurationBeforeGC = 1 * time.Minute
 		} else {
-			*scheduler.config.IdleDurationBeforeGC = 10 * time.Minute
+			*scheduler.config.IdleDurationBeforeGC = 7 * time.Minute
 		}
 	} else if config.Contains(config.GlobalMetaKey2, metaData.Key) {
 		if metaData.MemoryInMb <= 256 {
-			*scheduler.config.IdleDurationBeforeGC = 3 * time.Minute
+			*scheduler.config.IdleDurationBeforeGC = 5 * time.Minute
 		} else {
 			*scheduler.config.IdleDurationBeforeGC = 10 * time.Minute
 		}
 	} else {
 		if metaData.MemoryInMb <= 512 {
-			*scheduler.config.IdleDurationBeforeGC = 3 * time.Second
+			*scheduler.config.IdleDurationBeforeGC = 1 * time.Second
 		} else if metaData.MemoryInMb <= 1024 {
-			*scheduler.config.IdleDurationBeforeGC = 10 * time.Second
+			*scheduler.config.IdleDurationBeforeGC = 30 * time.Second
 		} else {
 			*scheduler.config.IdleDurationBeforeGC = 3 * time.Minute
 		}
