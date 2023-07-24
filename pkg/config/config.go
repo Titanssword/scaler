@@ -69,7 +69,7 @@ func LoadData3Duration() {
 		fmt.Println("无法获取当前工作目录:", err)
 		panic("no current dir")
 	}
-	file, err := os.Open(currentDir + "/scaler/averages.csv")
+	file, err := os.Open(currentDir + "/source/averages.csv")
 	if err != nil {
 		fmt.Println("Error opening file:", err)
 		panic("no data3 duration")
@@ -119,7 +119,7 @@ func LoadData3Memory() {
 		fmt.Println("无法获取当前工作目录:", err)
 		panic("no current dir")
 	}
-	file, err := os.Open(currentDir + "/scaler/metas")
+	file, err := os.Open(currentDir + "/source/metas")
 	if err != nil {
 		fmt.Println("Error opening file:", err)
 		panic("no data3 memory")
