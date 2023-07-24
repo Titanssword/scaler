@@ -3,7 +3,6 @@ package scaler
 import (
 	"container/list"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -65,8 +64,8 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 
 	// 记录qps，加锁
 	requestTime := start.Unix()
-	jsonString, _ := json.Marshal(request)
-	log.Printf("Assign, request time: %s, request: %s", start, jsonString)
+	// jsonString, _ := json.Marshal(request)
+	// log.Printf("Assign, request time: %s, request: %s", start, jsonString)
 	s.mu.Lock()
 	// qps 累加逻辑
 	if s.qpsEntityList.Len() == 0 {
@@ -104,14 +103,14 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	defer func() {
 		log.Printf("Assign, request id: %s, instance id: %s, cost %dms", request.RequestId, instanceId, time.Since(start).Milliseconds())
 	}()
-	log.Printf("Assign, request id: %s", request.RequestId)
+	// log.Printf("Assign, request id: %s", request.RequestId)
 	s.mu.Lock()
 	if element := s.idleInstance.Front(); element != nil {
 		instance := element.Value.(*model.Instance)
 		instance.Busy = true
 		s.idleInstance.Remove(element)
 		s.mu.Unlock()
-		log.Printf("Assign, request id: %s, instance %s reused", request.RequestId, instance.Id)
+		// log.Printf("Assign, request id: %s, instance %s reused", request.RequestId, instance.Id)
 		instanceId = instance.Id
 		return &pb.AssignReply{
 			Status: pb.Status_Ok,
@@ -157,7 +156,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	instance.Busy = true
 	s.instances[instance.Id] = instance
 	s.mu.Unlock()
-	log.Printf("request id: %s, instance %s for app %s is created, init latency: %dms", request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs)
+	// log.Printf("request id: %s, instance %s for app %s is created, init latency: %dms", request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs)
 
 	return &pb.AssignReply{
 		Status: pb.Status_Ok,
@@ -190,7 +189,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	start := time.Now()
 	instanceId := request.Assigment.InstanceId
 	defer func() {
-		log.Printf("Idle, request id: %s, instance: %s, cost %dus, data3Duration: %s", request.Assigment.RequestId, instanceId, time.Since(start).Microseconds(), len(config.Meta3Duration))
+		// log.Printf("Idle, request id: %s, instance: %s, cost %dus, data3Duration: %d", request.Assigment.RequestId, instanceId, time.Since(start).Microseconds(), len(config.Meta3Duration))
 	}()
 	// jsonStringIdle, _ := json.Marshal(request)
 	// log.Printf("Idle, request: %v", jsonStringIdle)
@@ -198,55 +197,58 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	slotId := ""
 
 	// 针对数据集1 做优化
-	if contains(config.GlobalMetaKey1, request.Assigment.MetaKey) {
-		// 预测qps逻辑
-		// seer := &strategy.Seer{
-		// 	CurrentQPS: s.qpsList[start.Unix()-s.startPoint-60 : start.Unix()-s.startPoint],
-		// }
-		// jsonStringSeer, _ := json.Marshal(seer)
-		// log.Printf("Ilde, seer: %v", jsonStringSeer)
-		// increase := seer.PredictQPSIncrese(ctx)
-		// if !increase && s.idleInstance.Len() > 2 {
-		// 	needDestroy = true
-		// }
-		requestTime := start.Unix()
-		if s.qpsEntityList.Len() != 0 {
-			cur := s.qpsEntityList.Back().Value.(*model.QpsEntity)
-			if cur != nil {
-				if cur.CurrentTime <= requestTime {
-					balancePodNums := cur.QPS * int(1/config.Meta1Duration[request.Assigment.MetaKey])
-					if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 1 {
-						needDestroy = true
-					}
-				}
-			}
-		}
-	}
-	// 针对数据集2 做优化
-	if contains(config.GlobalMetaKey2, request.Assigment.MetaKey) {
-		requestTime := start.Unix()
-		if s.qpsEntityList.Len() != 0 {
-			cur := s.qpsEntityList.Back().Value.(*model.QpsEntity)
-			if cur != nil {
-				if cur.CurrentTime <= requestTime {
-					balancePodNums := cur.QPS * int(1/config.Meta2Duration[request.Assigment.MetaKey])
-					if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 1 {
-						needDestroy = true
-					}
-				}
-			}
-		}
-	}
+	// if contains(config.GlobalMetaKey1, request.Assigment.MetaKey) {
+	// 	// 预测qps逻辑
+	// 	// seer := &strategy.Seer{
+	// 	// 	CurrentQPS: s.qpsList[start.Unix()-s.startPoint-60 : start.Unix()-s.startPoint],
+	// 	// }
+	// 	// jsonStringSeer, _ := json.Marshal(seer)
+	// 	// log.Printf("Ilde, seer: %v", jsonStringSeer)
+	// 	// increase := seer.PredictQPSIncrese(ctx)
+	// 	// if !increase && s.idleInstance.Len() > 2 {
+	// 	// 	needDestroy = true
+	// 	// }
+	// 	requestTime := start.Unix()
+	// 	if s.qpsEntityList.Len() != 0 {
+	// 		cur := s.qpsEntityList.Back().Value.(*model.QpsEntity)
+	// 		if cur != nil {
+	// 			if cur.CurrentTime <= requestTime {
+	// 				balancePodNums := cur.QPS / int(1000/config.Meta1Duration[request.Assigment.MetaKey])
+	// 				if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 1 {
+	// 					needDestroy = true
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
+	// // 针对数据集2 做优化
+	// if contains(config.GlobalMetaKey2, request.Assigment.MetaKey) {
+	// 	requestTime := start.Unix()
+	// 	if s.qpsEntityList.Len() != 0 {
+	// 		cur := s.qpsEntityList.Back().Value.(*model.QpsEntity)
+	// 		if cur != nil {
+	// 			if cur.CurrentTime <= requestTime {
+	// 				balancePodNums := cur.QPS / int(1000/config.Meta2Duration[request.Assigment.MetaKey])
+	// 				if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 1 {
+	// 					needDestroy = true
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
 	// 针对数据集3 做优化
 	data3Duration, ok := config.Meta3Duration[request.Assigment.MetaKey]
-	if ok {
+	data3Memory, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
+	if ok && ok2 {
 		requestTime := start.Unix()
 		if s.qpsEntityList.Len() != 0 {
-			cur := s.qpsEntityList.Back().Value.(*model.QpsEntity)
+			// 取前一秒，防止当前的qps 还在计算过程中
+			cur := s.qpsEntityList.Back().Prev().Value.(*model.QpsEntity)
 			if cur != nil {
+				log.Printf("Idle, metaKey: %s, data3Duration: %f, data3Memory: %d, cur qps: %d", request.Assigment.MetaKey, data3Duration, data3Memory, cur.QPS)
 				if cur.CurrentTime <= requestTime {
-					balancePodNums := cur.QPS * int(1/data3Duration)
-					if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 1 {
+					balancePodNums := int(float32(cur.QPS) / float32(1000/data3Duration))
+					if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 0 && data3Memory > 1024 {
 						needDestroy = true
 					}
 				}
@@ -262,19 +264,19 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
 		}
 	}()
-	log.Printf("Idle, request id: %s", request.Assigment.RequestId)
+	// log.Printf("Idle, request id: %s", request.Assigment.RequestId)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if instance := s.instances[instanceId]; instance != nil {
 		slotId = instance.Slot.Id
 		instance.LastIdleTime = time.Now()
 		if needDestroy {
-			log.Printf("request id %s, instance %s need be destroy", request.Assigment.RequestId, instanceId)
+			// log.Printf("request id %s, instance %s need be destroy", request.Assigment.RequestId, instanceId)
 			return reply, nil
 		}
 
 		if instance.Busy == false {
-			log.Printf("request id %s, instance %s already freed", request.Assigment.RequestId, instanceId)
+			// log.Printf("request id %s, instance %s already freed", request.Assigment.RequestId, instanceId)
 			return reply, nil
 		}
 		instance.Busy = false
@@ -289,9 +291,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 }
 
 func (s *Try) deleteSlot(ctx context.Context, requestId, slotId, instanceId, metaKey, reason string) {
-	log.Printf("start delete Instance %s (Slot: %s) of app: %s", instanceId, slotId, metaKey)
+	// log.Printf("start delete Instance %s (Slot: %s) of app: %s", instanceId, slotId, metaKey)
 	if err := s.platformClient.DestroySLot(ctx, requestId, slotId, reason); err != nil {
-		log.Printf("delete Instance %s (Slot: %s) of app: %s failed with: %s", instanceId, slotId, metaKey, err.Error())
+		// log.Printf("delete Instance %s (Slot: %s) of app: %s failed with: %s", instanceId, slotId, metaKey, err.Error())
 	}
 }
 

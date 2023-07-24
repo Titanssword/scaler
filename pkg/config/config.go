@@ -15,6 +15,7 @@ package config
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -57,13 +58,21 @@ var Meta2Duration = map[string]float32{
 }
 
 var Meta3Duration map[string]float64
+var Meta3Memory map[string]int
 
-func LoadData3() {
+func LoadData3Duration() {
+	Meta3Duration = make(map[string]float64, 0)
 	// Open the file
-	file, err := os.Open("../../data/data_analyis/averages.csv")
+	currentDir, err := os.Getwd()
+	fmt.Println("currentDir: ", currentDir)
+	if err != nil {
+		fmt.Println("无法获取当前工作目录:", err)
+		panic("no current dir")
+	}
+	file, err := os.Open(currentDir + "/scaler/averages.csv")
 	if err != nil {
 		fmt.Println("Error opening file:", err)
-		return
+		panic("no data3 duration")
 	}
 	defer file.Close()
 
@@ -88,7 +97,52 @@ func LoadData3() {
 	}
 
 	// Print the map
-	for key, value := range Meta3Duration {
-		fmt.Printf("%s: %f\n", key, value)
+	// for key, value := range Meta3Duration {
+	// 	fmt.Printf("%s: %f\n", key, value)
+	// }
+}
+
+type Data struct {
+	Key            string `json:"key"`
+	Runtime        string `json:"runtime"`
+	MemoryInMb     int    `json:"memoryInMb"`
+	TimeoutInSecs  int    `json:"timeoutInSecs"`
+	InitDurationMs int    `json:"initDurationInMs"`
+}
+
+func LoadData3Memory() {
+	Meta3Memory := make(map[string]int)
+	// Open the file
+	currentDir, err := os.Getwd()
+	fmt.Println("currentDir: ", currentDir)
+	if err != nil {
+		fmt.Println("无法获取当前工作目录:", err)
+		panic("no current dir")
 	}
+	file, err := os.Open(currentDir + "/scaler/metas")
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		panic("no data3 memory")
+	}
+	defer file.Close()
+
+	// Read the file line by line
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		data := &Data{}
+		_ = json.Unmarshal([]byte(line), &data)
+		Meta3Memory[data.Key] = data.MemoryInMb
+	}
+
+	// Check for scanner errors
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error reading file:", err)
+		return
+	}
+
+	// Print the map
+	// for key, value := range Meta3Memory {
+	// 	fmt.Printf("%s: %d\n", key, value)
+	// }
 }

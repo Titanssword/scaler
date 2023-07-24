@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/AliyunContainerService/scaler/pkg/config"
 	"github.com/AliyunContainerService/scaler/pkg/model"
@@ -51,6 +52,12 @@ func (m *Manager) GetOrCreate(metaData *model.Meta) scaler.Scaler {
 		return scheduler
 	}
 	log.Printf("Create new scaler for app %s", metaData.Key)
+	data3Memory, ok := config.Meta3Memory[metaData.Key]
+	if ok && data3Memory > 1024 {
+		var newGC = 10 * time.Second
+		m.config.IdleDurationBeforeGC = &newGC
+	}
+
 	scheduler := scaler.NewV2(metaData, m.config)
 	m.schedulers[metaData.Key] = scheduler
 	m.rw.Unlock()
