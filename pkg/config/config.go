@@ -111,7 +111,7 @@ type Data struct {
 }
 
 func LoadData3Memory() {
-	Meta3Memory := make(map[string]int)
+	Meta3Memory = make(map[string]int)
 	// Open the file
 	currentDir, err := os.Getwd()
 	fmt.Println("currentDir: ", currentDir)

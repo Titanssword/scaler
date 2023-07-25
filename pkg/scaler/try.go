@@ -98,6 +98,12 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	if s.qpsEntityList.Len() > 300 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
+	// 超出30min，也清除头
+	front := s.qpsEntityList.Front().Value.(*model.QpsEntity)
+	if front.CurrentTime < requestTime-300 {
+		s.qpsEntityList.Remove(s.qpsEntityList.Front())
+	}
+
 	s.mu.Unlock()
 
 	defer func() {
@@ -238,17 +244,21 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// }
 	// 针对数据集3 做优化
 	data3Duration, ok := config.Meta3Duration[request.Assigment.MetaKey]
+	// dd, _ := json.Marshal(data3Duration)
 	data3Memory, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
+	// dm, _ := json.Marshal(data3Memory)
+	// log.Printf("data3Duration: %v, data3Memory: %v, qpsEntityList: %v", data3Duration, data3Memory, s.qpsEntityList.Len())
+	var curQPS int
 	if ok && ok2 {
 		requestTime := start.Unix()
-		if s.qpsEntityList.Len() != 0 {
+		if s.qpsEntityList.Len() > 1 {
 			// 取前一秒，防止当前的qps 还在计算过程中
 			cur := s.qpsEntityList.Back().Prev().Value.(*model.QpsEntity)
 			if cur != nil {
-				log.Printf("Idle, metaKey: %s, data3Duration: %f, data3Memory: %d, cur qps: %d", request.Assigment.MetaKey, data3Duration, data3Memory, cur.QPS)
 				if cur.CurrentTime <= requestTime {
-					balancePodNums := int(float32(cur.QPS) / float32(1000/data3Duration))
-					if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 0 && data3Memory > 1024 {
+					curQPS = cur.QPS
+					balancePodNums := int(float32(curQPS) / float32(1000/data3Duration))
+					if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 0 && data3Memory >= 1024 {
 						needDestroy = true
 					}
 				}
@@ -259,6 +269,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
 	}
+	log.Printf("Idle, metaKey: %s, data3Duration: %f, data3Memory: %d, instance len: %d, cur qps: %d, s.idleInstance.Len(): %d,  needDestroy: %v", request.Assigment.MetaKey, data3Duration, data3Memory, len(s.instances), curQPS, s.idleInstance.Len(), needDestroy)
 	defer func() {
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")

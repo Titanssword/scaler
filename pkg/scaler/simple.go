@@ -165,7 +165,7 @@ func (s *Simple) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleRep
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
 		}
 	}()
-	log.Printf("Idle, request id: %s", request.Assigment.RequestId)
+	// log.Printf("Idle, request id: %s", request.Assigment.RequestId)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if instance := s.instances[instanceId]; instance != nil {
