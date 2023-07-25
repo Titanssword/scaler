@@ -116,7 +116,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		instance.Busy = true
 		s.idleInstance.Remove(element)
 		s.mu.Unlock()
-		// log.Printf("Assign, request id: %s, instance %s reused", request.RequestId, instance.Id)
+		log.Printf("Assign, metakey: %s, request id: %s, instance %s reused", request.MetaData.Key, request.RequestId, instance.Id)
 		instanceId = instance.Id
 		return &pb.AssignReply{
 			Status: pb.Status_Ok,
@@ -131,6 +131,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.mu.Unlock()
 
 	//Create new Instance
+	log.Printf("Assign, metakey: %s, request id: %s, instance %s create new", request.MetaData.Key, request.RequestId)
 	resourceConfig := model.SlotResourceConfig{
 		ResourceConfig: pb.ResourceConfig{
 			MemoryInMegabytes: request.MetaData.MemoryInMb,
@@ -249,6 +250,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// dm, _ := json.Marshal(data3Memory)
 	// log.Printf("data3Duration: %v, data3Memory: %v, qpsEntityList: %v", data3Duration, data3Memory, s.qpsEntityList.Len())
 	var curQPS int
+	var balancePodNums int
 	if ok && ok2 {
 		requestTime := start.Unix()
 		if s.qpsEntityList.Len() > 1 {
@@ -257,8 +259,11 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			if cur != nil {
 				if cur.CurrentTime <= requestTime {
 					curQPS = cur.QPS
-					balancePodNums := int(float32(curQPS) / float32(1000/data3Duration))
-					if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 0 && data3Memory >= 1024 {
+					balancePodNums = int(float32(curQPS) / float32(1000/data3Duration))
+					// if len(s.instances) >= balancePodNums || (s.idleInstance.Len() > 3 && data3Memory >= 1024 && data3Duration < 1000) {
+					// 	needDestroy = true
+					// }
+					if len(s.instances) >= balancePodNums {
 						needDestroy = true
 					}
 				}
@@ -269,7 +274,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
 	}
-	log.Printf("Idle, metaKey: %s, data3Duration: %f, data3Memory: %d, instance len: %d, cur qps: %d, s.idleInstance.Len(): %d,  needDestroy: %v", request.Assigment.MetaKey, data3Duration, data3Memory, len(s.instances), curQPS, s.idleInstance.Len(), needDestroy)
+	log.Printf("Idle, metaKey: %s, data3Duration: %f, data3Memory: %d, instance len: %d, cur qps: %d, balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v",
+		request.Assigment.MetaKey, data3Duration, data3Memory, len(s.instances), curQPS, balancePodNums, s.idleInstance.Len(), needDestroy)
 	defer func() {
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")

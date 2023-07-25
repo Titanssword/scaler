@@ -59,6 +59,7 @@ var Meta2Duration = map[string]float32{
 
 var Meta3Duration map[string]float64
 var Meta3Memory map[string]int
+var Meta3InitDurationMs map[string]int
 
 func LoadData3Duration() {
 	Meta3Duration = make(map[string]float64, 0)
@@ -112,6 +113,7 @@ type Data struct {
 
 func LoadData3Memory() {
 	Meta3Memory = make(map[string]int)
+	Meta3InitDurationMs = map[string]int{}
 	// Open the file
 	currentDir, err := os.Getwd()
 	fmt.Println("currentDir: ", currentDir)
@@ -133,6 +135,7 @@ func LoadData3Memory() {
 		data := &Data{}
 		_ = json.Unmarshal([]byte(line), &data)
 		Meta3Memory[data.Key] = data.MemoryInMb
+		Meta3InitDurationMs[data.Key] = data.InitDurationMs
 	}
 
 	// Check for scanner errors
