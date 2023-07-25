@@ -247,11 +247,12 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	data3Duration, ok := config.Meta3Duration[request.Assigment.MetaKey]
 	// dd, _ := json.Marshal(data3Duration)
 	data3Memory, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
+	data3InitDuration, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
 	// dm, _ := json.Marshal(data3Memory)
 	// log.Printf("data3Duration: %v, data3Memory: %v, qpsEntityList: %v", data3Duration, data3Memory, s.qpsEntityList.Len())
 	var curQPS int
 	var balancePodNums int
-	if ok && ok2 {
+	if ok && ok2 && ok3 {
 		requestTime := start.Unix()
 		if s.qpsEntityList.Len() > 1 {
 			// 取前一秒，防止当前的qps 还在计算过程中
@@ -259,11 +260,11 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			if cur != nil {
 				if cur.CurrentTime <= requestTime {
 					curQPS = cur.QPS
-					balancePodNums = int(float32(curQPS) / float32(1000/data3Duration))
+					balancePodNums = int(float32(curQPS)/float32(1000/data3Duration)) + 1
 					// if len(s.instances) >= balancePodNums || (s.idleInstance.Len() > 3 && data3Memory >= 1024 && data3Duration < 1000) {
 					// 	needDestroy = true
 					// }
-					if len(s.instances) >= balancePodNums {
+					if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 1 && data3Memory >= 1024 && data3InitDuration < 1000 {
 						needDestroy = true
 					}
 				}

@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	"time"
 
 	"github.com/AliyunContainerService/scaler/pkg/config"
 	"github.com/AliyunContainerService/scaler/pkg/model"
@@ -52,19 +51,19 @@ func (m *Manager) GetOrCreate(metaData *model.Meta) scaler.Scaler {
 		return scheduler
 	}
 	log.Printf("Create new scaler for app %s", metaData.Key)
-	data3Memory, ok := config.Meta3Memory[metaData.Key]
-	_, ok2 := config.Meta3InitDurationMs[metaData.Key]
-	if ok && ok2 {
-		if data3Memory > 1024 {
-			var newGC = 20 * time.Second
-			m.config.IdleDurationBeforeGC = &newGC
-			log.Printf("IdleDurationBeforeGC: %s", m.config.IdleDurationBeforeGC)
-		} else {
-			var newGC = 1 * time.Minute
-			m.config.IdleDurationBeforeGC = &newGC
-			log.Printf("IdleDurationBeforeGC: %s", m.config.IdleDurationBeforeGC)
-		}
-	}
+	// data3Memory, ok := config.Meta3Memory[metaData.Key]
+	// _, ok2 := config.Meta3InitDurationMs[metaData.Key]
+	// if ok && ok2 {
+	// 	if data3Memory > 1024 {
+	// 		var newGC = 20 * time.Second
+	// 		m.config.IdleDurationBeforeGC = &newGC
+	// 		log.Printf("IdleDurationBeforeGC: %s", m.config.IdleDurationBeforeGC)
+	// 	} else {
+	// 		var newGC = 1 * time.Minute
+	// 		m.config.IdleDurationBeforeGC = &newGC
+	// 		log.Printf("IdleDurationBeforeGC: %s", m.config.IdleDurationBeforeGC)
+	// 	}
+	// }
 
 	scheduler := scaler.NewV2(metaData, m.config)
 	m.schedulers[metaData.Key] = scheduler
