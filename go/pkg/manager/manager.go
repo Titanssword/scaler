@@ -17,26 +17,26 @@ import (
 	"fmt"
 	"github.com/AliyunContainerService/scaler/go/pkg/config"
 	"github.com/AliyunContainerService/scaler/go/pkg/model"
-	scaler2 "github.com/AliyunContainerService/scaler/go/pkg/scaler"
+	scaler "github.com/AliyunContainerService/scaler/go/pkg/scaler"
 	"log"
 	"sync"
 )
 
 type Manager struct {
 	rw         sync.RWMutex
-	schedulers map[string]scaler2.Scaler
+	schedulers map[string]scaler.Scaler
 	config     *config.Config
 }
 
 func New(config *config.Config) *Manager {
 	return &Manager{
 		rw:         sync.RWMutex{},
-		schedulers: make(map[string]scaler2.Scaler),
+		schedulers: make(map[string]scaler.Scaler),
 		config:     config,
 	}
 }
 
-func (m *Manager) GetOrCreate(metaData *model.Meta) scaler2.Scaler {
+func (m *Manager) GetOrCreate(metaData *model.Meta) scaler.Scaler {
 	m.rw.RLock()
 	if scheduler := m.schedulers[metaData.Key]; scheduler != nil {
 		m.rw.RUnlock()
@@ -50,13 +50,27 @@ func (m *Manager) GetOrCreate(metaData *model.Meta) scaler2.Scaler {
 		return scheduler
 	}
 	log.Printf("Create new scaler for app %s", metaData.Key)
-	scheduler := scaler2.New(metaData, m.config)
+	// data3Memory, ok := config.Meta3Memory[metaData.Key]
+	// _, ok2 := config.Meta3InitDurationMs[metaData.Key]
+	// if ok && ok2 {
+	// 	if data3Memory > 1024 {
+	// 		var newGC = 20 * time.Second
+	// 		m.config.IdleDurationBeforeGC = &newGC
+	// 		log.Printf("IdleDurationBeforeGC: %s", m.config.IdleDurationBeforeGC)
+	// 	} else {
+	// 		var newGC = 1 * time.Minute
+	// 		m.config.IdleDurationBeforeGC = &newGC
+	// 		log.Printf("IdleDurationBeforeGC: %s", m.config.IdleDurationBeforeGC)
+	// 	}
+	// }
+
+	scheduler := scaler.NewV2(metaData, m.config)
 	m.schedulers[metaData.Key] = scheduler
 	m.rw.Unlock()
 	return scheduler
 }
 
-func (m *Manager) Get(metaKey string) (scaler2.Scaler, error) {
+func (m *Manager) Get(metaKey string) (scaler.Scaler, error) {
 	m.rw.RLock()
 	defer m.rw.RUnlock()
 	if scheduler := m.schedulers[metaKey]; scheduler != nil {

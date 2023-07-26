@@ -7,7 +7,8 @@ FROM registry.cn-beijing.aliyuncs.com/cloudnative-challenge/golang:1.17.1 as bui
 WORKDIR /build
 
 # Copy the source code excluding the 'data' directory
-COPY .. ./
+COPY . ./
+RUN rm -rf ./data
 RUN go build -o scaler cmd/scaler/main.go
 
 # In the second stage, we'll use a small, lightweight base image.

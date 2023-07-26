@@ -152,6 +152,9 @@ func (s *Simple) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleRep
 	}()
 	//log.Printf("Idle, request id: %s", request.Assigment.RequestId)
 	needDestroy := false
+	if s.idleInstance.Len() > 3 {
+		needDestroy = true
+	}
 	slotId := ""
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
@@ -161,7 +164,7 @@ func (s *Simple) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleRep
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
 		}
 	}()
-	log.Printf("Idle, request id: %s", request.Assigment.RequestId)
+	// log.Printf("Idle, request id: %s", request.Assigment.RequestId)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if instance := s.instances[instanceId]; instance != nil {
@@ -203,13 +206,13 @@ func (s *Simple) gcLoop() {
 			if element := s.idleInstance.Back(); element != nil {
 				instance := element.Value.(*model2.Instance)
 				idleDuration := time.Now().Sub(instance.LastIdleTime)
-				if idleDuration > s.config.IdleDurationBeforeGC {
+				if idleDuration > *s.config.IdleDurationBeforeGC {
 					//need GC
 					s.idleInstance.Remove(element)
 					delete(s.instances, instance.Id)
 					s.mu.Unlock()
 					go func() {
-						reason := fmt.Sprintf("Idle duration: %fs, excceed configured duration: %fs", idleDuration.Seconds(), s.config.IdleDurationBeforeGC.Seconds())
+						reason := fmt.Sprintf("Idle duration: %fs, excceed configured duration: %fs", idleDuration.Seconds(), (*s.config.IdleDurationBeforeGC).Seconds())
 						ctx := context.Background()
 						ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 						defer cancel()
