@@ -267,19 +267,19 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// 按照多次取平均的方式计算QPS
 		cur1 := s.qpsEntityList.Back().Value.(*model.QpsEntity)
 		cur2 := s.qpsEntityList.Back().Prev().Value.(*model.QpsEntity)
-		aveQPSTotal := float32(cur2.QPS) / float32(cur1.CurrentTime-cur2.CurrentTime)
+		avgQPSTotal := float32(cur2.QPS) / float32(cur1.CurrentTime-cur2.CurrentTime)
 		total := 1
 		if s.qpsEntityList.Len() > 2 {
 			cur3 := s.qpsEntityList.Back().Prev().Prev().Value.(*model.QpsEntity)
-			aveQPSTotal += float32(cur3.QPS) / float32(cur2.CurrentTime-cur3.CurrentTime)
+			avgQPSTotal += float32(cur3.QPS) / float32(cur2.CurrentTime-cur3.CurrentTime)
 			total++
 			if s.qpsEntityList.Len() > 3 {
 				cur4 := s.qpsEntityList.Back().Prev().Prev().Prev().Value.(*model.QpsEntity)
-				aveQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
+				avgQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
 				total++
 			}
 		}
-		aveQPS := aveQPSTotal / float32(total)
+		avgQPS := avgQPSTotal / float32(total)
 		/*
 			选择1和选择2，哪个能在整体上带来更高的收益？假设两部分收益整体的比例关系为：alpha:1
 			1. 如果此时销毁当前实例：在下一次使用当前实例时，重新初始化，代价为“调度总时间”，增加一次初始化时间
@@ -287,7 +287,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			PS：精确的预测空闲时间比较好，这里先用平均QPS倒数估算一下
 		*/
 		contribute1 := float32(data3InitDurationMS) / float32(1000)
-		contribute2 := float32(s.idleInstance.Len()+1) / aveQPS * float32(data3MemoryMB) / float32(1024)
+		contribute2 := float32(s.idleInstance.Len()+1) / avgQPS * float32(data3MemoryMB) / float32(1024)
 		if alpha+1.0/(1.0+contribute1) > alpha/(1.0+contribute2)+1 {
 			needDestroy = true
 		}
