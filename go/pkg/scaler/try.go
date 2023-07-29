@@ -259,8 +259,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 
 	// 针对数据集3 做优化
 	//data3Duration, ok1 := config.Meta3Duration[request.Assigment.MetaKey]
-	data3MemoryMB, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
-	data3InitDurationMS, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
+	data3MemoryMb, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
+	data3InitDurationMs, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
 
 	var alpha float32 = 2.5
 	if ok2 && ok3 && s.qpsEntityList.Len() > 1 {
@@ -286,8 +286,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			2. 如果此时不销毁当前实例：则代价为“请求执行总消耗”，增加当前实例空闲时间*当前实例消耗的资源
 			PS：精确的预测空闲时间比较好，这里先用平均QPS倒数估算一下
 		*/
-		contribute1 := float32(data3InitDurationMS) / float32(1000)
-		contribute2 := float32(s.idleInstance.Len()+1) / avgQPS * float32(data3MemoryMB) / float32(1024)
+		contribute1 := float32(data3InitDurationMs) / float32(1000)
+		contribute2 := float32(s.idleInstance.Len()+1) / avgQPS * float32(data3MemoryMb) / float32(1024)
 		if alpha+1.0/(1.0+contribute1) > alpha/(1.0+contribute2)+1 {
 			needDestroy = true
 		}
