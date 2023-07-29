@@ -107,13 +107,13 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 			s.qpsEntityList.PushBack(tmp)
 		}
 	}
-	// 删除多余元素，位置5min的时间窗口
-	if s.qpsEntityList.Len() > 300 {
+	// 删除多余元素，位置1h的时间窗口
+	if s.qpsEntityList.Len() > 3600 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
-	// 超出5min，也清除头
+	// 超出1h，也清除头
 	front := s.qpsEntityList.Front().Value.(*model.QpsEntity)
-	if front.CurrentTime < requestTime-300 {
+	if front.CurrentTime < requestTime-3600 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
 
@@ -206,7 +206,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		Status:       pb.Status_Ok,
 		ErrorMessage: nil,
 	}
-	start := time.Now()
+	//start := time.Now()
 	instanceId := request.Assigment.InstanceId
 	defer func() {
 		// log.Printf("Idle, request id: %s, instance: %s, cost %dus, data3Duration: %d", request.Assigment.RequestId, instanceId, time.Since(start).Microseconds(), len(config.Meta3Duration))
@@ -256,43 +256,48 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// 		}
 	// 	}
 	// }
+
 	// 针对数据集3 做优化
-	data3Duration, ok := config.Meta3Duration[request.Assigment.MetaKey]
-	// dd, _ := json.Marshal(data3Duration)
-	data3Memory, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
-	data3InitDuration, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
-	// dm, _ := json.Marshal(data3Memory)
-	// log.Printf("data3Duration: %v, data3Memory: %v, qpsEntityList: %v", data3Duration, data3Memory, s.qpsEntityList.Len())
-	var curQPS int
-	var balancePodNums int
-	if ok && ok2 && ok3 {
-		requestTime := start.Unix()
-		if s.qpsEntityList.Len() > 1 {
-			// 取前一秒，防止当前的qps 还在计算过程中
-			cur := s.qpsEntityList.Back().Prev().Value.(*model.QpsEntity)
-			if cur != nil {
-				if cur.CurrentTime <= requestTime && cur.CurrentTime > requestTime-3 {
-					curQPS = cur.QPS
-					balancePodNums = int(float32(curQPS)/float32(1000/data3Duration)) + 1
-					// if len(s.instances) >= balancePodNums || (s.idleInstance.Len() > 3 && data3Memory >= 1024 && data3Duration < 1000) {
-					// 	needDestroy = true
-					// }
-					// if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 0 && data3Memory >= 1024 && data3InitDuration < 1000 {
-					// 	needDestroy = true
-					// }
-					if len(s.instances) > balancePodNums && s.idleInstance.Len() > 0 && data3Memory >= 512 && data3InitDuration < 1000 {
-						needDestroy = true
-					}
-				}
+	//data3Duration, ok1 := config.Meta3Duration[request.Assigment.MetaKey]
+	data3MemoryMB, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
+	data3InitDurationMS, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
+
+	var alpha float32 = 2.5
+	if ok2 && ok3 && s.qpsEntityList.Len() > 1 {
+		// 按照多次取平均的方式计算QPS
+		cur1 := s.qpsEntityList.Back().Value.(*model.QpsEntity)
+		cur2 := s.qpsEntityList.Back().Prev().Value.(*model.QpsEntity)
+		aveQPSTotal := float32(cur2.QPS) / float32(cur1.CurrentTime-cur2.CurrentTime)
+		total := 1
+		if s.qpsEntityList.Len() > 2 {
+			cur3 := s.qpsEntityList.Back().Prev().Prev().Value.(*model.QpsEntity)
+			aveQPSTotal += float32(cur3.QPS) / float32(cur2.CurrentTime-cur3.CurrentTime)
+			total++
+			if s.qpsEntityList.Len() > 3 {
+				cur4 := s.qpsEntityList.Back().Prev().Prev().Prev().Value.(*model.QpsEntity)
+				aveQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
+				total++
 			}
+		}
+		aveQPS := aveQPSTotal / float32(total)
+		/*
+			选择1和选择2，哪个能在整体上带来更高的收益？假设两部分收益整体的比例关系为：alpha:1
+			1. 如果此时销毁当前实例：在下一次使用当前实例时，重新初始化，代价为“调度总时间”，增加一次初始化时间
+			2. 如果此时不销毁当前实例：则代价为“请求执行总消耗”，增加当前实例空闲时间*当前实例消耗的资源
+			PS：精确的预测空闲时间比较好，这里先用平均QPS倒数估算一下
+		*/
+		contribute1 := float32(data3InitDurationMS) / float32(1000)
+		contribute2 := float32(s.idleInstance.Len()+1) / aveQPS * float32(data3MemoryMB) / float32(1024)
+		if alpha+1.0/(1.0+contribute1) > alpha/(1.0+contribute2)+1 {
+			needDestroy = true
 		}
 	}
 
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
 	}
-	log.Printf("Idle, metaKey: %s, data3Duration: %f, data3Memory: %d, instance len: %d, cur qps: %d, balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v",
-		request.Assigment.MetaKey, data3Duration, data3Memory, len(s.instances), curQPS, balancePodNums, s.idleInstance.Len(), needDestroy)
+	//log.Printf("Idle, metaKey: %s, data3Duration: %f, data3MemoryMB: %d, instance len: %d, cur qps: %d, balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v",
+	//	request.Assigment.MetaKey, data3Duration, data3MemoryMB, len(s.instances), curQPS, balancePodNums, s.idleInstance.Len(), needDestroy)
 	defer func() {
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
