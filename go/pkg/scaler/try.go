@@ -265,21 +265,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	var alpha float32 = 2.5
 	if ok2 && ok3 && s.qpsEntityList.Len() > 1 {
 		// 按照多次取平均的方式计算QPS
-		cur1 := s.qpsEntityList.Back().Value.(*model.QpsEntity)
-		cur2 := s.qpsEntityList.Back().Prev().Value.(*model.QpsEntity)
-		avgQPSTotal := float32(cur2.QPS) / float32(cur1.CurrentTime-cur2.CurrentTime)
-		total := 1
-		if s.qpsEntityList.Len() > 2 {
-			cur3 := s.qpsEntityList.Back().Prev().Prev().Value.(*model.QpsEntity)
-			avgQPSTotal += float32(cur3.QPS) / float32(cur2.CurrentTime-cur3.CurrentTime)
-			total++
-			if s.qpsEntityList.Len() > 3 {
-				cur4 := s.qpsEntityList.Back().Prev().Prev().Prev().Value.(*model.QpsEntity)
-				avgQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
-				total++
-			}
-		}
-		avgQPS := avgQPSTotal / float32(total)
+		avgQPS := s.GetAvgQPS()
 		/*
 			选择1和选择2，哪个能在整体上带来更高的收益？假设两部分收益整体的比例关系为：alpha:1
 			1. 如果此时销毁当前实例：在下一次使用当前实例时，重新初始化，代价为“调度总时间”，增加一次初始化时间
@@ -327,6 +313,28 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		Status:       pb.Status_Ok,
 		ErrorMessage: nil,
 	}, nil
+}
+
+func (s *Try) GetAvgQPS() float32 {
+	if s.qpsEntityList.Len() <= 1 {
+		return 0
+	}
+	cur1 := s.qpsEntityList.Back().Value.(*model.QpsEntity)
+	cur2 := s.qpsEntityList.Back().Prev().Value.(*model.QpsEntity)
+	avgQPSTotal := float32(cur2.QPS) / float32(cur1.CurrentTime-cur2.CurrentTime)
+	total := 1
+	if s.qpsEntityList.Len() > 2 {
+		cur3 := s.qpsEntityList.Back().Prev().Prev().Value.(*model.QpsEntity)
+		avgQPSTotal += float32(cur3.QPS) / float32(cur2.CurrentTime-cur3.CurrentTime)
+		total++
+		if s.qpsEntityList.Len() > 3 {
+			cur4 := s.qpsEntityList.Back().Prev().Prev().Prev().Value.(*model.QpsEntity)
+			avgQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
+			total++
+		}
+	}
+	avgQPS := avgQPSTotal / float32(total)
+	return avgQPS
 }
 
 func (s *Try) deleteSlot(ctx context.Context, requestId, slotId, instanceId, metaKey, reason string) {
