@@ -31,13 +31,13 @@ type Try struct {
 	// qpsEntityMap   map[int64]*model.QpsEntity 1683859454
 }
 
-func NewV2(metaData *model.Meta, config *config.Config) Scaler {
-	client, err := platform_client.New(config.ClientAddr)
+func NewV2(metaData *model.Meta, c *config.Config) Scaler {
+	client, err := platform_client.New(c.ClientAddr)
 	if err != nil {
 		log.Fatalf("client init with error: %s", err.Error())
 	}
 	scheduler := &Try{
-		config:         config,
+		config:         c,
 		metaData:       metaData,
 		platformClient: client,
 		mu:             sync.Mutex{},
@@ -49,6 +49,19 @@ func NewV2(metaData *model.Meta, config *config.Config) Scaler {
 		qpsEntityList: list.New(),
 	}
 	log.Printf("New scaler for app: %s is created", metaData.Key)
+
+	if contains(config.GlobalMetaKey1, metaData.Key) {
+		*scheduler.config.IdleDurationBeforeGC = 5 * time.Minute
+	} else if contains(config.GlobalMetaKey2, metaData.Key) {
+		if metaData.MemoryInMb <= 256 {
+			*scheduler.config.IdleDurationBeforeGC = 11 * time.Minute
+		} else {
+			*scheduler.config.IdleDurationBeforeGC = 3 * time.Minute
+		}
+	} else {
+		*scheduler.config.IdleDurationBeforeGC = 3 * time.Minute
+	}
+
 	scheduler.wg.Add(1)
 	go func() {
 		defer scheduler.wg.Done()
@@ -98,7 +111,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	if s.qpsEntityList.Len() > 300 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
-	// 超出30min，也清除头
+	// 超出5min，也清除头
 	front := s.qpsEntityList.Front().Value.(*model.QpsEntity)
 	if front.CurrentTime < requestTime-300 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
