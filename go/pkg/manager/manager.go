@@ -64,12 +64,15 @@ func (m *Manager) GetOrCreate(metaData *model.Meta) scaler.Scaler {
 		// 	log.Printf("IdleDurationBeforeGC: %s", m.config.IdleDurationBeforeGC)
 		// }
 		if data3InitDuration > 1000 {
-			m.config.IdleDurationBeforeGC = 15 * time * Minute
+			var newGC = 15 * time.Minute
+			m.config.IdleDurationBeforeGC = &newGC
 		} else {
 			if data3Memory > 1024 {
-				m.config.IdleDurationBeforeGC = 3 * time * Minute
+				var newGC = 3 * time.Minute
+				m.config.IdleDurationBeforeGC = &newGC
 			} else {
-				m.config.IdleDurationBeforeGC = 1 * time * Minute
+				var newGC = 1 * time.Minute
+				m.config.IdleDurationBeforeGC = &newGC
 			}
 		}
 	}
