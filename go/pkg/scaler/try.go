@@ -256,6 +256,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// log.Printf("data3Duration: %v, data3Memory: %v, qpsEntityList: %v", data3Duration, data3Memory, s.qpsEntityList.Len())
 	var curQPS int
 	var balancePodNums int
+	s.mu.Lock()
+	curPodNums := len(s.instances)
+	curIdlePodNums := s.idleInstance.Len()
 	if ok && ok2 && ok3 {
 		requestTime := start.Unix()
 		if s.qpsEntityList.Len() > 1 {
@@ -271,7 +274,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 					// if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 0 && data3Memory >= 1024 && data3InitDuration < 1000 {
 					// 	needDestroy = true
 					// }
-					if len(s.instances) > (balancePodNums*2) && s.idleInstance.Len() > 0 && data3InitDuration < 1000 {
+					// 认为后面1s内，该pod不会被再利用
+					if curPodNums >= (balancePodNums+1) && curIdlePodNums > 0 && data3Memory >= data3InitDuration {
 						needDestroy = true
 					}
 				}
