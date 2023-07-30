@@ -271,7 +271,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 					// if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 0 && data3Memory >= 1024 && data3InitDuration < 1000 {
 					// 	needDestroy = true
 					// }
-					if len(s.instances) > balancePodNums+1 && s.idleInstance.Len() > 5 && data3Memory >= 512 && data3InitDuration < 1000 {
+					if len(s.instances) > (balancePodNums*2) && s.idleInstance.Len() > 0 && data3InitDuration < 1000 {
 						needDestroy = true
 					}
 				}
