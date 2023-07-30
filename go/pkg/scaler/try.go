@@ -29,6 +29,8 @@ type Try struct {
 	// startPoint     int64      // 20230601 1685548800 以来的 1683859454
 	qpsEntityList *list.List // 最近5min的qps，len=300
 	// qpsEntityMap   map[int64]*model.QpsEntity 1683859454
+	directRemoveCnt int
+	gcRemoveCnt     int
 }
 
 func NewV2(metaData *model.Meta, config *config.Config) Scaler {
@@ -46,7 +48,9 @@ func NewV2(metaData *model.Meta, config *config.Config) Scaler {
 		idleInstance:   list.New(),
 		// qpsList:        make([]int64, 100000000),
 		// startPoint:     1680278400,
-		qpsEntityList: list.New(),
+		qpsEntityList:   list.New(),
+		directRemoveCnt: 0,
+		gcRemoveCnt:     0,
 	}
 	log.Printf("New scaler for app: %s is created", metaData.Key)
 	scheduler.wg.Add(1)
@@ -267,7 +271,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 					// if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 0 && data3Memory >= 1024 && data3InitDuration < 1000 {
 					// 	needDestroy = true
 					// }
-					if len(s.instances) > balancePodNums && s.idleInstance.Len() > 0 && data3Memory >= 512 && data3InitDuration < 1000 {
+					if len(s.instances) > balancePodNums+1 && s.idleInstance.Len() > 5 && data3Memory >= 512 && data3InitDuration < 1000 {
 						needDestroy = true
 					}
 				}
@@ -277,9 +281,12 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
+		s.directRemoveCnt = s.directRemoveCnt + 1
+	} else {
+		s.gcRemoveCnt = s.gcRemoveCnt + 1
 	}
-	log.Printf("Idle, metaKey: %s, data3Duration: %f, data3Memory: %d, instance len: %d, cur qps: %d, balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v",
-		request.Assigment.MetaKey, data3Duration, data3Memory, len(s.instances), curQPS, balancePodNums, s.idleInstance.Len(), needDestroy)
+	log.Printf("Idle, metaKey: %s, data3Duration: %f, data3Memory: %d, instance len: %d, cur qps: %d, balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, directRemoveCnt: %v, gcRemoveCnt: %v",
+		request.Assigment.MetaKey, data3Duration, data3Memory, len(s.instances), curQPS, balancePodNums, s.idleInstance.Len(), needDestroy, s.directRemoveCnt, s.gcRemoveCnt)
 	defer func() {
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
