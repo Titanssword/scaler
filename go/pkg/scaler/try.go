@@ -59,7 +59,7 @@ func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 			*scheduler.config.IdleDurationBeforeGC = 3 * time.Minute
 		}
 	} else {
-		*scheduler.config.IdleDurationBeforeGC = 3 * time.Minute
+		*scheduler.config.IdleDurationBeforeGC = 1 * time.Minute
 	}
 
 	scheduler.wg.Add(1)
@@ -262,6 +262,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	data3MemoryMb, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
 	data3InitDurationMs, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
 
+	var balancePodNums int
 	avgQPS := s.GetAvgQPS()
 	if ok1 && ok2 && ok3 && avgQPS > 0 {
 		/*
@@ -271,7 +272,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			PS：精确的预测空闲时间比较好，这里先用平均QPS倒数估算一下
 		*/
 		idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
-		if idleTime > float32(data3InitDurationMs) {
+		balancePodNums = int(avgQPS*float32(data3Duration)/1000.0) + 1
+		if len(s.instances) >= balancePodNums && idleTime > float32(data3InitDurationMs) {
 			needDestroy = true
 		}
 	}
@@ -279,8 +281,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
 	}
-	log.Printf("【Idle】metaKey: %s, data3Duration: %f, data3MemoryMb: %d, instance len: %d, avr qps: %f, s.idleInstance.Len(): %d, needDestroy: %v",
-		request.Assigment.MetaKey, data3Duration, data3MemoryMb, len(s.instances), avgQPS, s.idleInstance.Len(), needDestroy)
+	log.Printf("【Idle】metaKey: %s, data3Duration: %f, data3MemoryMb: %d, instance len: %d, avr qps: %f, s.idleInstance.Len(): %d, needDestroy: %v, balancePodNums: %d",
+		request.Assigment.MetaKey, data3Duration, data3MemoryMb, len(s.instances), avgQPS, s.idleInstance.Len(), needDestroy, balancePodNums)
 	defer func() {
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
