@@ -107,13 +107,13 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 			s.qpsEntityList.PushBack(tmp)
 		}
 	}
-	// 删除多余元素，位置1h的时间窗口
-	if s.qpsEntityList.Len() > 3600 {
+	// 删除多余元素，位置20min的时间窗口
+	if s.qpsEntityList.Len() > 1200 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
-	// 超出1h，也清除头
+	// 超出20min，也清除头
 	front := s.qpsEntityList.Front().Value.(*model.QpsEntity)
-	if front.CurrentTime < requestTime-3600 {
+	if front.CurrentTime < requestTime-1200 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
 
@@ -144,7 +144,6 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.mu.Unlock()
 
 	//Create new Instance
-	log.Printf("Assign, metakey: %s, request id: %s, instance %s create new", request.MetaData.Key, request.RequestId)
 	resourceConfig := model.SlotResourceConfig{
 		ResourceConfig: pb.ResourceConfig{
 			MemoryInMegabytes: request.MetaData.MemoryInMb,
@@ -170,6 +169,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		log.Printf(errorMessage)
 		return nil, status.Errorf(codes.Internal, errorMessage)
 	}
+	log.Printf("Assign, metakey: %s, request id: %s, instance %s create new", request.MetaData.Key, request.RequestId, instance.Id)
 
 	//add new instance
 	s.mu.Lock()
@@ -258,14 +258,12 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// }
 
 	// 针对数据集3 做优化
-	_, ok1 := config.Meta3Duration[request.Assigment.MetaKey]
-	_, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
+	data3Duration, ok1 := config.Meta3Duration[request.Assigment.MetaKey]
+	data3MemoryMb, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
 	data3InitDurationMs, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
 
-	//var alpha float32 = 2.5
-	if ok1 && ok2 && ok3 && s.qpsEntityList.Len() > 1 {
-		// 按照多次取平均的方式计算QPS
-		avgQPS := s.GetAvgQPS()
+	avgQPS := s.GetAvgQPS()
+	if ok1 && ok2 && ok3 && avgQPS > 0 {
 		/*
 			选择1和选择2，哪个能在整体上带来更高的收益？
 			1. 如果此时销毁当前实例：在下一次使用当前实例时，重新初始化，代价为“调度总时间”，增加一次初始化时间
@@ -281,8 +279,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
 	}
-	//log.Printf("Idle, metaKey: %s, data3Duration: %f, data3MemoryMB: %d, instance len: %d, cur qps: %d, balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v",
-	//	request.Assigment.MetaKey, data3Duration, data3MemoryMB, len(s.instances), curQPS, balancePodNums, s.idleInstance.Len(), needDestroy)
+	log.Printf("【Idle】metaKey: %s, data3Duration: %f, data3MemoryMb: %d, instance len: %d, avr qps: %f, s.idleInstance.Len(): %d, needDestroy: %v",
+		request.Assigment.MetaKey, data3Duration, data3MemoryMb, len(s.instances), avgQPS, s.idleInstance.Len(), needDestroy)
 	defer func() {
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
@@ -315,25 +313,40 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 }
 
 func (s *Try) GetAvgQPS() float32 {
-	if s.qpsEntityList.Len() <= 1 {
+	if s.qpsEntityList.Len() < 1 {
 		return 0
 	}
 	cur1 := s.qpsEntityList.Back().Value.(*model.QpsEntity)
-	cur2 := s.qpsEntityList.Back().Prev().Value.(*model.QpsEntity)
-	avgQPSTotal := float32(cur2.QPS) / float32(cur1.CurrentTime-cur2.CurrentTime)
-	total := 1
-	if s.qpsEntityList.Len() > 2 {
-		cur3 := s.qpsEntityList.Back().Prev().Prev().Value.(*model.QpsEntity)
-		avgQPSTotal += float32(cur3.QPS) / float32(cur2.CurrentTime-cur3.CurrentTime)
+	now := time.Now().Unix()
+	if s.qpsEntityList.Len() == 1 && now == cur1.CurrentTime {
+		return 0
+	}
+
+	var (
+		avgQPSTotal float32 = 0
+		total       float32 = 0
+	)
+	if now > cur1.CurrentTime {
+		avgQPSTotal += float32(cur1.QPS) / float32(time.Now().Unix()-cur1.CurrentTime)
 		total++
-		if s.qpsEntityList.Len() > 3 {
-			cur4 := s.qpsEntityList.Back().Prev().Prev().Prev().Value.(*model.QpsEntity)
-			avgQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
+	}
+	if s.qpsEntityList.Len() > 1 {
+		cur2 := s.qpsEntityList.Back().Prev().Value.(*model.QpsEntity)
+		avgQPSTotal += float32(cur2.QPS) / float32(cur1.CurrentTime-cur2.CurrentTime)
+		total++
+		if s.qpsEntityList.Len() > 2 {
+			cur3 := s.qpsEntityList.Back().Prev().Prev().Value.(*model.QpsEntity)
+			avgQPSTotal += float32(cur3.QPS) / float32(cur2.CurrentTime-cur3.CurrentTime)
 			total++
+			if s.qpsEntityList.Len() > 3 {
+				cur4 := s.qpsEntityList.Back().Prev().Prev().Prev().Value.(*model.QpsEntity)
+				avgQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
+				total++
+			}
 		}
 	}
-	avgQPS := avgQPSTotal / float32(total)
-	return avgQPS
+
+	return avgQPSTotal / total
 }
 
 func (s *Try) deleteSlot(ctx context.Context, requestId, slotId, instanceId, metaKey, reason string) {
