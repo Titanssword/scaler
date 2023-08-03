@@ -31,11 +31,11 @@ type Config struct {
 
 var DefaultConfig = Config{
 	ClientAddr:           "127.0.0.1:50051",
-	GcInterval:           10 * time.Second,
+	GcInterval:           1 * time.Second,
 	IdleDurationBeforeGC: &BeforeGC,
 }
 
-var BeforeGC time.Duration = 5 * time.Minute
+var BeforeGC time.Duration = 1 * time.Minute
 
 var GlobalMetaKey1 = []string{"nodes1", "roles1", "rolebindings1", "certificatesigningrequests1", "binding1", "csinodes1"}
 

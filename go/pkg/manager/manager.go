@@ -15,12 +15,13 @@ package manager
 
 import (
 	"fmt"
-	"github.com/AliyunContainerService/scaler/go/pkg/config"
-	"github.com/AliyunContainerService/scaler/go/pkg/model"
-	scaler "github.com/AliyunContainerService/scaler/go/pkg/scaler"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/AliyunContainerService/scaler/go/pkg/config"
+	"github.com/AliyunContainerService/scaler/go/pkg/model"
+	scaler "github.com/AliyunContainerService/scaler/go/pkg/scaler"
 )
 
 type Manager struct {
@@ -54,27 +55,21 @@ func (m *Manager) GetOrCreate(metaData *model.Meta) scaler.Scaler {
 	data3Memory, ok := config.Meta3Memory[metaData.Key]
 	data3InitDuration, ok2 := config.Meta3InitDurationMs[metaData.Key]
 	if ok && ok2 {
-		// if data3Memory < 1024 {
-		// 	var newGC = 3 * time.Minute
-		// 	m.config.IdleDurationBeforeGC = &newGC
-		// 	log.Printf("IdleDurationBeforeGC: %s", m.config.IdleDurationBeforeGC)
-		// } else {
-		// 	var newGC = 15 * time.Minute
-		// 	m.config.IdleDurationBeforeGC = &newGC
-		// 	log.Printf("IdleDurationBeforeGC: %s", m.config.IdleDurationBeforeGC)
-		// }
-		if data3InitDuration > 1000 {
-			var newGC = 15 * time.Minute
-			m.config.IdleDurationBeforeGC = &newGC
-		} else {
-			if data3Memory > 1024 {
-				var newGC = 3 * time.Minute
-				m.config.IdleDurationBeforeGC = &newGC
-			} else {
-				var newGC = 1 * time.Minute
-				m.config.IdleDurationBeforeGC = &newGC
-			}
-		}
+		//if data3InitDuration > 1000 {
+		//var newGC = 15 * time.Minute
+		//m.config.IdleDurationBeforeGC = &newGC
+		//} else {
+		//if data3Memory > 1024 {
+		//var newGC = 3 * time.Minute
+		//m.config.IdleDurationBeforeGC = &newGC
+		//} else {
+		//var newGC = 1 * time.Minute
+		//m.config.IdleDurationBeforeGC = &newGC
+		//}
+		//}
+		a := data3InitDuration/data3Memory + 1
+		newGCTime := time.Duration(a*5) * time.Second
+		m.config.IdleDurationBeforeGC = &newGCTime
 	}
 
 	scheduler := scaler.NewV2(metaData, m.config)

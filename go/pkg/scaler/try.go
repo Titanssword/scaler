@@ -4,14 +4,15 @@ import (
 	"container/list"
 	"context"
 	"fmt"
+	"log"
+	"sync"
+	"time"
+
 	"github.com/AliyunContainerService/scaler/go/pkg/config"
 	model "github.com/AliyunContainerService/scaler/go/pkg/model"
 	platform_client "github.com/AliyunContainerService/scaler/go/pkg/platform_client"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"log"
-	"sync"
-	"time"
 
 	pb "github.com/AliyunContainerService/scaler/proto"
 	"github.com/google/uuid"
@@ -27,10 +28,23 @@ type Try struct {
 	idleInstance   *list.List
 	// qpsList        []int64    // qps list
 	// startPoint     int64      // 20230601 1685548800 以来的 1683859454
-	qpsEntityList *list.List // 最近5min的qps，len=300
+	qpsEntityList *list.List // 最近5min的qps，len=60
+	// lastMinQPS               // 最近1min qps
 	// qpsEntityMap   map[int64]*model.QpsEntity 1683859454
-	directRemoveCnt int
-	gcRemoveCnt     int
+	directRemoveCnt int // 越大，资源分越高
+	gcRemoveCnt     int // 越大，冷启动分高
+	curIntanceCnt   int
+	// resourceUsageScore int
+	// resourceUsageScore int
+	// reused  int // 越大，冷启动分高,节省 init time
+	// created int // 越大，资源分高， 节省 resource cost
+	// 理想状态, reused 少了，需要降低directRemoveCnt, created 少了，需要提高directRemoveCnt
+	// 如果created < directRemoveCnt, 说明，reused 多，还可以再删一些
+	// 如果created > directRemoveCnt, 说明，reused 少，需要少删一些
+	wrongDecisionCnt    int   // 如果 need  destroy = true，且在 initTime / mem 的时间内，还是出现了created ，则属于bad case
+	lastNeedDestoryTime int64 // 上一次
+	lastQPS             int64
+	lastTime            int64
 }
 
 func NewV2(metaData *model.Meta, config *config.Config) Scaler {
@@ -48,9 +62,14 @@ func NewV2(metaData *model.Meta, config *config.Config) Scaler {
 		idleInstance:   list.New(),
 		// qpsList:        make([]int64, 100000000),
 		// startPoint:     1680278400,
-		qpsEntityList:   list.New(),
-		directRemoveCnt: 0,
-		gcRemoveCnt:     0,
+		qpsEntityList:    list.New(),
+		directRemoveCnt:  0,
+		gcRemoveCnt:      0,
+		curIntanceCnt:    0,
+		wrongDecisionCnt: 0,
+		lastQPS:          0,
+		lastTime:         0,
+		// lastMinQPS:       0,
 	}
 	log.Printf("New scaler for app: %s is created", metaData.Key)
 	scheduler.wg.Add(1)
@@ -98,13 +117,14 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 			s.qpsEntityList.PushBack(tmp)
 		}
 	}
-	// 删除多余元素，位置5min的时间窗口
-	if s.qpsEntityList.Len() > 300 {
+
+	// 删除多余元素，位置1min的时间窗口
+	if s.qpsEntityList.Len() > 10 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
 	// 超出30min，也清除头
 	front := s.qpsEntityList.Front().Value.(*model.QpsEntity)
-	if front.CurrentTime < requestTime-300 {
+	if front.CurrentTime < requestTime-10 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
 
@@ -166,8 +186,18 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.mu.Lock()
 	instance.Busy = true
 	s.instances[instance.Id] = instance
+	s.curIntanceCnt = s.curIntanceCnt + 1
+
+	// 惩罚点, 在允许范围时间内，早删除了实例
+	data3Memory, ok := config.Meta3Memory[request.MetaData.Key]
+	data3InitDuration, ok2 := config.Meta3InitDurationMs[request.MetaData.Key]
+	if ok && ok2 {
+		if (requestTime - s.lastNeedDestoryTime) < int64(data3InitDuration/data3Memory) {
+			s.wrongDecisionCnt = s.wrongDecisionCnt + 1
+		}
+	}
 	s.mu.Unlock()
-	// log.Printf("request id: %s, instance %s for app %s is created, init latency: %dms", request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs)
+	log.Printf("request id: %s, instance %s for app %s is created, init latency: %dms", request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs)
 
 	return &pb.AssignReply{
 		Status: pb.Status_Ok,
@@ -256,42 +286,67 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// log.Printf("data3Duration: %v, data3Memory: %v, qpsEntityList: %v", data3Duration, data3Memory, s.qpsEntityList.Len())
 	var curQPS int
 	var balancePodNums int
+	requestTime := start.Unix()
 	s.mu.Lock()
 	curPodNums := len(s.instances)
+	// stats := s.Stats()
+	curPodNums2 := s.curIntanceCnt
+	// curPodNums3 := s.Stats().TotalInstance
 	curIdlePodNums := s.idleInstance.Len()
-	if ok && ok2 && ok3 {
-		requestTime := start.Unix()
-		if s.qpsEntityList.Len() > 1 {
-			// 取前一秒，防止当前的qps 还在计算过程中
-			cur := s.qpsEntityList.Back().Prev().Value.(*model.QpsEntity)
-			if cur != nil {
-				if cur.CurrentTime <= requestTime && cur.CurrentTime > requestTime-3 {
-					curQPS = cur.QPS
-					balancePodNums = int(float32(curQPS)/float32(1000/data3Duration)) + 1
-					// if len(s.instances) >= balancePodNums || (s.idleInstance.Len() > 3 && data3Memory >= 1024 && data3Duration < 1000) {
-					// 	needDestroy = true
-					// }
-					// if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 0 && data3Memory >= 1024 && data3InitDuration < 1000 {
-					// 	needDestroy = true
-					// }
-					// 认为后面1s内，该pod不会被再利用
-					if curPodNums >= (balancePodNums+1) && curIdlePodNums > 0 && data3Memory >= data3InitDuration {
-						needDestroy = true
-					}
-				}
-			}
+	var curTime int
+	var score float64 = 0.0
+	var a float64 = 0.0
+	var b float64 = 0.0
+	var c float64 = 0.0
+	var d float64 = 0.0
+	cnt := 0
+	lastMinQPS := 0
+	for item := s.qpsEntityList.Front(); nil != item; item = item.Next() {
+		cur := item.Value.(*model.QpsEntity)
+		if cur.CurrentTime <= requestTime && cur.CurrentTime > requestTime-60 {
+			cnt = cnt + cur.QPS
 		}
 	}
-	s.mu.Unlock()
+	lastMinQPS = cnt/s.qpsEntityList.Len() + 1
+	if ok && ok2 && ok3 && curIdlePodNums > 0 {
+		// 初始化时间+执行时间+调用时间
+		coldAllTime := (data3Duration + float64(data3InitDuration)) + 20
+		balancePodNums = int(float32(curQPS)/float32(1000/coldAllTime)) + 1
 
+		// wrongDesicionCost := 0
+		// s1: 认为后面1s内，该pod不会被再利用
+		if data3Memory >= data3InitDuration && data3Duration != 0 {
+			a = 0.25 * (float64(data3Memory) / float64(data3InitDuration))
+		}
+		if s.directRemoveCnt != 0 {
+			b = 0.25 * (float64(s.directRemoveCnt) - float64(s.wrongDecisionCnt)) / float64(s.directRemoveCnt)
+		} else {
+			b = 0.25
+		}
+		if curIdlePodNums >= balancePodNums {
+			c = 0.25
+		}
+		if lastMinQPS != 0 {
+			d = 0.25 * float64(curIdlePodNums) / float64(lastMinQPS)
+		}
+		score = a + b + c + d
+		if score >= 1 {
+			needDestroy = true
+		}
+	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
+	}
+	if needDestroy {
 		s.directRemoveCnt = s.directRemoveCnt + 1
+		s.lastNeedDestoryTime = int64(curTime)
 	} else {
 		s.gcRemoveCnt = s.gcRemoveCnt + 1
 	}
-	log.Printf("Idle, metaKey: %s, data3Duration: %f, data3Memory: %d, instance len: %d, cur qps: %d, balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, directRemoveCnt: %v, gcRemoveCnt: %v",
-		request.Assigment.MetaKey, data3Duration, data3Memory, len(s.instances), curQPS, balancePodNums, s.idleInstance.Len(), needDestroy, s.directRemoveCnt, s.gcRemoveCnt)
+	log.Printf("Idle, metaKey: %s, s.wrongDecisionCnt: %d, instance: %s, requestTime: %d,  cur.time: %d, data3Duration: %f, data3InitDuration:%d, data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, directRemoveCnt: %v, gcRemoveCnt: %v, request.Result.NeedDestroy: %v",
+		request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId, requestTime, curTime, data3Duration, data3InitDuration, data3Memory, curPodNums, curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt, s.gcRemoveCnt, *request.Result.NeedDestroy)
+	log.Printf("score: %f, a: %f, b: %f, c: %f, d: %f", score, a, b, c, d)
+	s.mu.Unlock()
 	defer func() {
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
@@ -326,7 +381,10 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 func (s *Try) deleteSlot(ctx context.Context, requestId, slotId, instanceId, metaKey, reason string) {
 	// log.Printf("start delete Instance %s (Slot: %s) of app: %s", instanceId, slotId, metaKey)
 	if err := s.platformClient.DestroySLot(ctx, requestId, slotId, reason); err != nil {
-		// log.Printf("delete Instance %s (Slot: %s) of app: %s failed with: %s", instanceId, slotId, metaKey, err.Error())
+		log.Printf("delete Instance %s (Slot: %s) of app: %s failed with: %s", instanceId, slotId, metaKey, err.Error())
+		s.mu.Lock()
+		s.curIntanceCnt = s.curIntanceCnt - 1
+		s.mu.Unlock()
 	}
 }
 
