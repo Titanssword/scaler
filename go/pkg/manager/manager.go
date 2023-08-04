@@ -52,6 +52,20 @@ func (m *Manager) GetOrCreate(metaData *model.Meta) scaler.Scaler {
 		return scheduler
 	}
 	log.Printf("Create new scaler for app %s", metaData.Key)
+
+	// 测试集1 5min
+	_, okk1 := config.Meta1Duration[metaData.Key]
+	if okk1 {
+		newGCTime := time.Duration(5) * time.Minute
+		m.config.IdleDurationBeforeGC = &newGCTime
+	}
+	// 测试集2 7min
+	_, okk2 := config.Meta2Duration[metaData.Key]
+	if okk2 {
+		newGCTime := time.Duration(7) * time.Minute
+		m.config.IdleDurationBeforeGC = &newGCTime
+	}
+
 	data3Memory, ok := config.Meta3Memory[metaData.Key]
 	data3InitDuration, ok2 := config.Meta3InitDurationMs[metaData.Key]
 	if ok && ok2 {
@@ -68,7 +82,7 @@ func (m *Manager) GetOrCreate(metaData *model.Meta) scaler.Scaler {
 		//}
 		//}
 		a := data3InitDuration/data3Memory + 1
-		newGCTime := time.Duration(a*10) * time.Second
+		newGCTime := time.Duration(a*8) * time.Second
 		m.config.IdleDurationBeforeGC = &newGCTime
 	}
 
