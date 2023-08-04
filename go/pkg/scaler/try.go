@@ -324,10 +324,10 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			b = 0.25
 		}
 		if curIdlePodNums >= balancePodNums {
-			c = 0.25
+			c = 0.3
 		}
 		if lastMinQPS != 0 {
-			d = 0.25 * float64(curIdlePodNums) / float64(lastMinQPS)
+			d = 0.3 * float64(curIdlePodNums) / float64(lastMinQPS)
 		}
 		score = a + b + c + d
 		if score >= 1 {
