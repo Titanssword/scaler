@@ -6,6 +6,10 @@ FROM registry.cn-beijing.aliyuncs.com/cloudnative-challenge/golang:1.17.1 as bui
 # Set the working directory to /build.
 WORKDIR /build
 
+RUN apt-get update
+
+RUN echo "deb  bionic main" > /etc/apt/sources.list
+
 # Copy the source code excluding the 'data' directory
 COPY ./go ./
 # RUN rm -rf ./data
