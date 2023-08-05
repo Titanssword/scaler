@@ -284,7 +284,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	data3InitDuration, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
 	// dm, _ := json.Marshal(data3Memory)
 	// log.Printf("data3Duration: %v, data3Memory: %v, qpsEntityList: %v", data3Duration, data3Memory, s.qpsEntityList.Len())
-	var curQPS int
+	// var curQPS int
 	var balancePodNums int
 	requestTime := start.Unix()
 	s.mu.Lock()
@@ -311,8 +311,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 
 	lastMinQPS = cnt/s.qpsEntityList.Len() + 1
 	// 启动时间 + 执行时间 + idle时间（近似20ms）
-	durationPerPod := float64(data3Duration + float64(data3InitDuration) + 20)
-	if float64(data3Duration+float64(data3InitDuration)+20) > 1 {
+	durationPerPod := float64(data3Duration + 20)
+	if durationPerPod > 1 {
 		// 如果1s 中处理m个，那么 n qps 需要 n/m 个pod就够
 		balancePodNums = int(float64(lastMinQPS) / (1000 / durationPerPod))
 	} else {
@@ -321,12 +321,12 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 
 	if ok && ok2 && ok3 && curIdlePodNums > 0 && curIdlePodNums >= balancePodNums {
 		// 初始化时间+执行时间+调用时间
-		coldAllTime := (data3Duration + float64(data3InitDuration)) + 20
-		balancePodNums = int(float32(curQPS)/float32(1000/coldAllTime)) + 1
+		// coldAllTime := (data3Duration + float64(data3InitDuration)) + 20
+		// balancePodNums = int(float32(lastMinQPS)/float32(1000/coldAllTime)) + 1
 
 		// wrongDesicionCost := 0
 		// s1: 认为后面1s内，该pod不会被再利用
-		if data3Memory >= data3InitDuration && data3Duration != 0 {
+		if data3Duration != 0 {
 			a = 0.5 * (float64(data3Memory) / float64(data3InitDuration))
 		}
 		if lastMinQPS != 0 {
