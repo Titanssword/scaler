@@ -300,6 +300,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	var c float64 = 0.0
 	var d float64 = 0.0
 	cnt := 0
+	// 最近1分钟的数量
 	lastMinQPS := 0
 	for item := s.qpsEntityList.Front(); nil != item; item = item.Next() {
 		cur := item.Value.(*model.QpsEntity)
@@ -307,8 +308,18 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			cnt = cnt + cur.QPS
 		}
 	}
+
 	lastMinQPS = cnt/s.qpsEntityList.Len() + 1
-	if ok && ok2 && ok3 && curIdlePodNums > 0 {
+	// 启动时间 + 执行时间 + idle时间（近似20ms）
+	durationPerPod := float64(data3Duration + float64(data3InitDuration) + 20)
+	if float64(data3Duration+float64(data3InitDuration)+20) > 1 {
+		// 如果1s 中处理m个，那么 n qps 需要 n/m 个pod就够
+		balancePodNums = int(float64(lastMinQPS) / (1000 / durationPerPod))
+	} else {
+		balancePodNums = int(float64(lastMinQPS) * (durationPerPod / 1000))
+	}
+
+	if ok && ok2 && ok3 && curIdlePodNums > 0 && curIdlePodNums >= balancePodNums {
 		// 初始化时间+执行时间+调用时间
 		coldAllTime := (data3Duration + float64(data3InitDuration)) + 20
 		balancePodNums = int(float32(curQPS)/float32(1000/coldAllTime)) + 1
@@ -316,23 +327,20 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// wrongDesicionCost := 0
 		// s1: 认为后面1s内，该pod不会被再利用
 		if data3Memory >= data3InitDuration && data3Duration != 0 {
-			a = 0.25 * (float64(data3Memory) / float64(data3InitDuration))
-		}
-		if s.directRemoveCnt != 0 {
-			total := s.directRemoveCnt + s.gcRemoveCnt
-			b = 0.5 * (float64(total) - float64(s.wrongDecisionCnt)) / float64(total)
-		} else {
-			b = 0.25
-		}
-		if curIdlePodNums >= balancePodNums {
-			c = 0.3
+			a = 0.5 * (float64(data3Memory) / float64(data3InitDuration))
 		}
 		if lastMinQPS != 0 {
-			d = 0.3 * float64(curIdlePodNums) / float64(lastMinQPS)
+			d = 0.5 * float64(curIdlePodNums) / float64(lastMinQPS)
 		}
 		score = a + b + c + d
 		if score >= 1 {
 			needDestroy = true
+		}
+		total := s.directRemoveCnt + s.gcRemoveCnt
+		b = (float64(total) - float64(s.wrongDecisionCnt)) / float64(total)
+		// 修正
+		if b < 0.99 {
+			needDestroy = false
 		}
 	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
@@ -344,8 +352,15 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	} else {
 		s.gcRemoveCnt = s.gcRemoveCnt + 1
 	}
-	log.Printf("Idle, metaKey: %s, s.wrongDecisionCnt: %d, instance: %s, requestTime: %d,  cur.time: %d, data3Duration: %f, data3InitDuration:%d, data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, directRemoveCnt: %v, gcRemoveCnt: %v, request.Result.NeedDestroy: %v",
-		request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId, requestTime, curTime, data3Duration, data3InitDuration, data3Memory, curPodNums, curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt, s.gcRemoveCnt, *request.Result.NeedDestroy)
+	log.Printf(`Idle, metaKey: %s, s.wrongDecisionCnt: %d, instance: %s, 
+	requestTime: %d,  cur.time: %d, data3Duration: %f, data3InitDuration:%d, 
+	data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, 
+	balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, directRemoveCnt: %v, 
+	gcRemoveCnt: %v, durationPerPod: %f,request.Result.NeedDestroy: %v`,
+		request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId,
+		requestTime, curTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
+		curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
+		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy)
 	log.Printf("score: %f, a: %f, b: %f, c: %f, d: %f", score, a, b, c, d)
 	s.mu.Unlock()
 	defer func() {
