@@ -59,7 +59,7 @@ func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 			*scheduler.config.IdleDurationBeforeGC = 3 * time.Minute
 		}
 	} else {
-		*scheduler.config.IdleDurationBeforeGC = 1 * time.Minute
+		*scheduler.config.IdleDurationBeforeGC = 10 * time.Minute
 	}
 
 	scheduler.wg.Add(1)
@@ -271,10 +271,23 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			2. 如果此时不销毁当前实例：则代价为“请求执行总消耗”，增加当前实例空闲时间*当前实例消耗的资源
 			PS：精确的预测空闲时间比较好，这里先用平均QPS倒数估算一下
 		*/
-		idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
-		balancePodNums = int(avgQPS*float32(data3Duration)/1000.0) + 1
-		if len(s.instances) >= balancePodNums && idleTime > float32(data3InitDurationMs) {
+		//idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
+		//balancePodNums = int(avgQPS*float32(data3Duration)/1000.0) + 1
+		//if len(s.instances) >= balancePodNums && idleTime > float32(data3InitDurationMs) {
+		//	needDestroy = true
+		//}
+		if float32(s.idleInstance.Len()) >= avgQPS {
 			needDestroy = true
+		}
+		/*
+			优先释放 init time 小，同时 memory 大的实例
+			空闲时间 > 初始化时间，则直接删除
+		*/
+		if data3InitDurationMs <= 500 && float32(data3MemoryMb)/float32(data3InitDurationMs) >= 1.0 {
+			idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
+			if idleTime > float32(data3InitDurationMs) {
+				needDestroy = true
+			}
 		}
 	}
 
