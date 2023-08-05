@@ -332,9 +332,18 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if lastMinQPS != 0 {
 			d = 0.5 * float64(curIdlePodNums) / float64(lastMinQPS)
 		}
-		score = a + b + c + d
-		if score >= 1 {
-			needDestroy = true
+		// score = a + b + c + d
+		// if score >= 1 {
+		// 	needDestroy = true
+		// }
+		if a > 0.5 {
+			if d > 0.5 {
+				needDestroy = true
+			}
+		} else {
+			if d > 0.25 {
+				needDestroy = true
+			}
 		}
 		// total := s.directRemoveCnt + s.gcRemoveCnt
 		// b = (float64(total) - float64(s.wrongDecisionCnt)) / float64(total)
