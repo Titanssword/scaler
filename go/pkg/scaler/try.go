@@ -319,7 +319,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			a = 0.25 * (float64(data3Memory) / float64(data3InitDuration))
 		}
 		if s.directRemoveCnt != 0 {
-			b = 0.25 * (float64(s.directRemoveCnt) - float64(s.wrongDecisionCnt)) / float64(s.directRemoveCnt)
+			total := s.directRemoveCnt + s.gcRemoveCnt
+			b = 0.5 * (float64(total) - float64(s.wrongDecisionCnt)) / float64(total)
 		} else {
 			b = 0.25
 		}
