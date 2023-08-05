@@ -17,6 +17,11 @@ import (
 	"github.com/google/uuid"
 )
 
+var (
+	totalLock             = sync.RWMutex{}
+	totalInitTime float32 = 0.0
+)
+
 type Try struct {
 	config         *config.Config
 	metaData       *model.Meta
@@ -178,6 +183,13 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.mu.Unlock()
 	// log.Printf("request id: %s, instance %s for app %s is created, init latency: %dms", request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs)
 
+	// 设置全局初始化时间
+	if data3InitDurationMs, ok := config.Meta3InitDurationMs[request.MetaData.Key]; ok {
+		totalLock.Lock()
+		totalInitTime += float32(data3InitDurationMs) / 1000.0
+		totalLock.Unlock()
+	}
+
 	return &pb.AssignReply{
 		Status: pb.Status_Ok,
 		Assigment: &pb.Assignment{
@@ -262,20 +274,18 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	data3MemoryMb, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
 	data3InitDurationMs, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
 
-	var balancePodNums int
 	avgQPS := s.GetAvgQPS()
 	if ok1 && ok2 && ok3 && avgQPS > 0 {
 		/*
-			选择1和选择2，哪个能在整体上带来更高的收益？
-			1. 如果此时销毁当前实例：在下一次使用当前实例时，重新初始化，代价为“调度总时间”，增加一次初始化时间
-			2. 如果此时不销毁当前实例：则代价为“请求执行总消耗”，增加当前实例空闲时间*当前实例消耗的资源
-			PS：精确的预测空闲时间比较好，这里先用平均QPS倒数估算一下
+			获取初始化总耗时
 		*/
-		//idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
-		//balancePodNums = int(avgQPS*float32(data3Duration)/1000.0) + 1
-		//if len(s.instances) >= balancePodNums && idleTime > float32(data3InitDurationMs) {
-		//	needDestroy = true
-		//}
+		var totalInitTimeTmp float32
+		totalLock.RLock()
+		totalInitTimeTmp = totalInitTime
+		totalLock.RUnlock()
+		/*
+			如果空闲实例数，超过了平均QPS，销毁也是情理之中（兜底）
+		*/
 		if float32(s.idleInstance.Len()) >= avgQPS {
 			needDestroy = true
 		}
@@ -283,25 +293,33 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			优先释放 init time 小，同时 memory 大的实例
 			空闲时间 > 初始化时间，则直接删除
 		*/
-		if data3InitDurationMs <= 500 && float32(data3MemoryMb)/float32(data3InitDurationMs) >= 1.0 {
+		if data3InitDurationMs < 500 && float32(data3MemoryMb)/float32(data3InitDurationMs) > 1.0 {
 			idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
 			if idleTime > float32(data3InitDurationMs) && s.idleInstance.Len() > 1 {
 				needDestroy = true
 			}
+		}
+		/*
+			如果初始化slot总耗时超过10000秒，则不希望再初始化，needDestroy = false
+		*/
+		if totalInitTimeTmp > 10000 {
+			needDestroy = false
 		}
 	}
 
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
 	}
-	log.Printf("【Idle】metaKey: %s, data3Duration: %f, data3MemoryMb: %d, instance len: %d, avr qps: %f, s.idleInstance.Len(): %d, needDestroy: %v, balancePodNums: %d",
-		request.Assigment.MetaKey, data3Duration, data3MemoryMb, len(s.instances), avgQPS, s.idleInstance.Len(), needDestroy, balancePodNums)
+
+	log.Printf("【Idle】metaKey: %s, data3Duration: %f, data3MemoryMb: %d, instance len: %d, avr qps: %f, s.idleInstance.Len(): %d, needDestroy: %v",
+		request.Assigment.MetaKey, data3Duration, data3MemoryMb, len(s.instances), avgQPS, s.idleInstance.Len(), needDestroy)
+
 	defer func() {
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
 		}
 	}()
-	// log.Printf("Idle, request id: %s", request.Assigment.RequestId)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if instance := s.instances[instanceId]; instance != nil {
@@ -353,11 +371,11 @@ func (s *Try) GetAvgQPS() float32 {
 			cur3 := s.qpsEntityList.Back().Prev().Prev().Value.(*model.QpsEntity)
 			avgQPSTotal += float32(cur3.QPS) / float32(cur2.CurrentTime-cur3.CurrentTime)
 			total++
-			if s.qpsEntityList.Len() > 3 {
-				cur4 := s.qpsEntityList.Back().Prev().Prev().Prev().Value.(*model.QpsEntity)
-				avgQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
-				total++
-			}
+			//if s.qpsEntityList.Len() > 3 {
+			//	cur4 := s.qpsEntityList.Back().Prev().Prev().Prev().Value.(*model.QpsEntity)
+			//	avgQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
+			//	total++
+			//}
 		}
 	}
 
