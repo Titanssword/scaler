@@ -336,12 +336,12 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if score >= 1 {
 			needDestroy = true
 		}
-		total := s.directRemoveCnt + s.gcRemoveCnt
-		b = (float64(total) - float64(s.wrongDecisionCnt)) / float64(total)
-		// 修正
-		if b < 0.99 {
-			needDestroy = false
-		}
+		// total := s.directRemoveCnt + s.gcRemoveCnt
+		// b = (float64(total) - float64(s.wrongDecisionCnt)) / float64(total)
+		// // 修正
+		// if b < 0.99 {
+		// 	needDestroy = false
+		// }
 	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
