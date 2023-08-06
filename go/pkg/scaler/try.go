@@ -300,7 +300,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			}
 		}
 		/*
-			如果初始化slot总耗时超过10000秒，则不希望再初始化，needDestroy = false
+			如果初始化slot总耗时超过5000秒，则不希望再初始化，needDestroy = false
 		*/
 		if totalInitTimeTmp > 5000 {
 			needDestroy = false
