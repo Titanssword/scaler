@@ -201,7 +201,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		}
 	}
 	s.mu.Unlock()
-	log.Printf("request id: %s, instance %s for app %s is created, init latency: %dms", request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs)
+	log.Printf("request id: %s, instance %s for app %s is created, init latency: %dms, idle len: %d", request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs, s.idleInstance.Len())
 
 	return &pb.AssignReply{
 		Status: pb.Status_Ok,
@@ -388,14 +388,14 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
 		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy)
 	log.Printf("score: %f, a: %f, b: %f, c: %f, d: %f, wrong descion cnt: %d", score, a, b, c, d, manager.GM.GlobalWrongDesicionCnt)
-	s.mu.Unlock()
+	// s.mu.Unlock()
 	defer func() {
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
 		}
 	}()
 	// log.Printf("Idle, request id: %s", request.Assigment.RequestId)
-	s.mu.Lock()
+	// s.mu.Lock()
 	defer s.mu.Unlock()
 	if instance := s.instances[instanceId]; instance != nil {
 		slotId = instance.Slot.Id
