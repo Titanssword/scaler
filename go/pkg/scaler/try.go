@@ -293,7 +293,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			优先释放 init time 小，同时 memory 大的实例
 			空闲时间 > 初始化时间，则直接删除
 		*/
-		if data3InitDurationMs < 500 && float32(data3MemoryMb)/float32(data3InitDurationMs) > 2.0 {
+		if data3InitDurationMs < 200 && float32(data3MemoryMb)/float32(data3InitDurationMs) > 2.0 {
 			idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
 			if idleTime > float32(data3InitDurationMs) && s.idleInstance.Len() > 1 {
 				needDestroy = true
