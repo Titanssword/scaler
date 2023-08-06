@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/AliyunContainerService/scaler/go/pkg/config"
+	"github.com/AliyunContainerService/scaler/go/pkg/manager"
 	model "github.com/AliyunContainerService/scaler/go/pkg/model"
 	platform_client "github.com/AliyunContainerService/scaler/go/pkg/platform_client"
 	"google.golang.org/grpc/codes"
@@ -194,6 +195,9 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	if ok && ok2 {
 		if (requestTime - s.lastNeedDestoryTime) < 10*60*1000 {
 			s.wrongDecisionCnt = s.wrongDecisionCnt + 1
+			manager.GM.RW.Lock()
+			manager.GM.GlobalWrongDesicionCnt = manager.GM.GlobalWrongDesicionCnt + 1
+			manager.GM.RW.Unlock()
 		}
 	}
 	s.mu.Unlock()
@@ -343,15 +347,15 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			if d >= 0.5 {
 				needDestroy = true
 			} else {
-				if c > 0.5 {
+				if c >= 0.5 {
 					needDestroy = true
 				}
 			}
 		} else {
-			if d > 0.25 {
+			if d >= 0.25 {
 				needDestroy = true
 			} else {
-				if c > 0.5 {
+				if c >= 0.5 {
 					needDestroy = true
 				}
 			}
@@ -383,7 +387,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		requestTime, curTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
 		curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
 		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy)
-	log.Printf("score: %f, a: %f, b: %f, c: %f, d: %f", score, a, b, c, d)
+	log.Printf("score: %f, a: %f, b: %f, c: %f, d: %f, wrong descion cnt: %d", score, a, b, c, d, manager.GM.GlobalWrongDesicionCnt)
 	s.mu.Unlock()
 	defer func() {
 		if needDestroy {
