@@ -189,10 +189,10 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.curIntanceCnt = s.curIntanceCnt + 1
 
 	// 惩罚点, 在允许范围时间内，早删除了实例
-	data3Memory, ok := config.Meta3Memory[request.MetaData.Key]
-	data3InitDuration, ok2 := config.Meta3InitDurationMs[request.MetaData.Key]
+	_, ok := config.Meta3Memory[request.MetaData.Key]
+	_, ok2 := config.Meta3InitDurationMs[request.MetaData.Key]
 	if ok && ok2 {
-		if (requestTime - s.lastNeedDestoryTime) < int64(data3InitDuration/data3Memory) {
+		if (requestTime - s.lastNeedDestoryTime) < 10*60*1000 {
 			s.wrongDecisionCnt = s.wrongDecisionCnt + 1
 		}
 	}
@@ -296,7 +296,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	var curTime int
 	var score float64 = 0.0
 	var a float64 = 0.0
-	var b float64 = 0.0
+	var b float64 = 1.0
 	var c float64 = 0.0
 	var d float64 = 0.0
 	cnt := 0
@@ -339,8 +339,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// if score >= 1 {
 		// 	needDestroy = true
 		// }
-		if a > 0.5 {
-			if d > 0.5 {
+		if a >= 0.5 {
+			if d >= 0.5 {
 				needDestroy = true
 			} else {
 				if c > 0.5 {
@@ -357,7 +357,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			}
 		}
 		total := s.directRemoveCnt + s.gcRemoveCnt
-		b = (float64(total) - float64(s.wrongDecisionCnt)) / float64(total)
+		if total != 0 {
+			b = float64((total - s.wrongDecisionCnt) / total)
+		}
 		// 修正
 		if b < 0.99 {
 			needDestroy = false
