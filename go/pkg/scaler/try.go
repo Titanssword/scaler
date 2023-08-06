@@ -386,7 +386,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		requestTime, curTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
 		curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
 		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy)
-	log.Printf("score: %f, a: %f, b: %f, c: %f, d: %f, wrong descion cnt: %d", score, a, b, c, d, manager.GM.GlobalWrongDesicionCnt)
+	log.Printf("score: %f, a: %f, b: %f, c: %f, d: %f, wrong descion cnt: %d", score, a, b, c, d, config.GM.GlobalWrongDesicionCnt)
 	// s.mu.Unlock()
 	defer func() {
 		if needDestroy {
