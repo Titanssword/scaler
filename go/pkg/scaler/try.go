@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/AliyunContainerService/scaler/go/pkg/config"
-	"github.com/AliyunContainerService/scaler/go/pkg/manager"
 	model "github.com/AliyunContainerService/scaler/go/pkg/model"
 	platform_client "github.com/AliyunContainerService/scaler/go/pkg/platform_client"
 	"google.golang.org/grpc/codes"
@@ -195,9 +194,9 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	if ok && ok2 {
 		if (requestTime - s.lastNeedDestoryTime) < 10*60*1000 {
 			s.wrongDecisionCnt = s.wrongDecisionCnt + 1
-			manager.GM.RW.Lock()
-			manager.GM.GlobalWrongDesicionCnt = manager.GM.GlobalWrongDesicionCnt + 1
-			manager.GM.RW.Unlock()
+			config.GM.RW.Lock()
+			config.GM.GlobalWrongDesicionCnt = config.GM.GlobalWrongDesicionCnt + 1
+			config.GM.RW.Unlock()
 		}
 	}
 	s.mu.Unlock()

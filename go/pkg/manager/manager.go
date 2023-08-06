@@ -30,16 +30,6 @@ type Manager struct {
 	config     *config.Config
 }
 
-type GlobalMetrics struct {
-	RW                     sync.RWMutex
-	GlobalWrongDesicionCnt int
-}
-
-var GM *GlobalMetrics = &GlobalMetrics{
-	RW:                     sync.RWMutex{},
-	GlobalWrongDesicionCnt: 0,
-}
-
 func New(config *config.Config) *Manager {
 	return &Manager{
 		rw:         sync.RWMutex{},

@@ -20,6 +20,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -33,6 +34,16 @@ var DefaultConfig = Config{
 	ClientAddr:           "127.0.0.1:50051",
 	GcInterval:           1 * time.Second,
 	IdleDurationBeforeGC: &BeforeGC,
+}
+
+type GlobalMetrics struct {
+	RW                     sync.RWMutex
+	GlobalWrongDesicionCnt int
+}
+
+var GM *GlobalMetrics = &GlobalMetrics{
+	RW:                     sync.RWMutex{},
+	GlobalWrongDesicionCnt: 0,
 }
 
 var BeforeGC time.Duration = 1 * time.Minute
