@@ -3,6 +3,7 @@ package scaler
 import (
 	"container/list"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -135,6 +136,9 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	}()
 	// log.Printf("Assign, request id: %s", request.RequestId)
 	s.mu.Lock()
+	element := s.idleInstance.Front()
+	trsbytes, _ := json.Marshal(element)
+	log.Printf("[assign] idle element: %s, idel len: %d", string(trsbytes), s.idleInstance.Len())
 	if element := s.idleInstance.Front(); element != nil {
 		instance := element.Value.(*model.Instance)
 		instance.Busy = true
@@ -155,7 +159,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.mu.Unlock()
 
 	//Create new Instance
-	log.Printf("Assign, metakey: %s, request id: %s, instance %s create new", request.MetaData.Key, request.RequestId)
+	// log.Printf("Assign, metakey: %s, request id: %s, instance %s create new", request.MetaData.Key, request.RequestId)
 	resourceConfig := model.SlotResourceConfig{
 		ResourceConfig: pb.ResourceConfig{
 			MemoryInMegabytes: request.MetaData.MemoryInMb,
