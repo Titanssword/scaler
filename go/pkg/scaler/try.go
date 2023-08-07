@@ -300,7 +300,6 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	curPodNums2 := s.curIntanceCnt
 	// curPodNums3 := s.Stats().TotalInstance
 	curIdlePodNums := s.idleInstance.Len()
-	var curTime int
 	var score float64 = 0.0
 	var a float64 = 0.0
 	var b float64 = 1.0
@@ -326,7 +325,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		balancePodNums = int(float64(lastMinQPS) * (durationPerPod / 1000))
 	}
 
-	if ok && ok2 && ok3 && curIdlePodNums > 0 && curIdlePodNums >= balancePodNums {
+	if ok && ok2 && ok3 && curIdlePodNums > 1 && curIdlePodNums >= balancePodNums {
 		// 初始化时间+执行时间+调用时间
 		// coldAllTime := (data3Duration + float64(data3InitDuration)) + 20
 		// balancePodNums = int(float32(lastMinQPS)/float32(1000/coldAllTime)) + 1
@@ -347,18 +346,18 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// 	needDestroy = true
 		// }
 		if a >= 0.5 {
-			if d >= 0.5 {
+			if d > 0.5 {
 				needDestroy = true
 			} else {
-				if c >= 0.5 {
+				if c > 0.5 {
 					needDestroy = true
 				}
 			}
 		} else {
-			if d >= 0.25 {
+			if d > 0.25 {
 				needDestroy = true
 			} else {
-				if c >= 0.5 {
+				if c > 0.5 {
 					needDestroy = true
 				}
 			}
@@ -377,7 +376,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	}
 	if needDestroy {
 		s.directRemoveCnt = s.directRemoveCnt + 1
-		s.lastNeedDestoryTime = int64(curTime)
+		s.lastNeedDestoryTime = int64(requestTime)
 	} else {
 		s.gcRemoveCnt = s.gcRemoveCnt + 1
 	}
@@ -385,11 +384,11 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	requestTime: %d,  cur.time: %d, data3Duration: %f, data3InitDuration:%d, 
 	data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, 
 	balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, directRemoveCnt: %v, 
-	gcRemoveCnt: %v, durationPerPod: %f,request.Result.NeedDestroy: %v`,
+	gcRemoveCnt: %v, durationPerPod: %f,request.Result.NeedDestroy: %v, lastNeedDestoryTime: %v`,
 		request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId,
-		requestTime, curTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
+		requestTime, requestTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
 		curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
-		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy)
+		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime)
 	log.Printf("score: %f, a: %f, b: %f, c: %f, d: %f, wrong descion cnt: %d", score, a, b, c, d, config.GM.GlobalWrongDesicionCnt)
 	// s.mu.Unlock()
 	defer func() {
