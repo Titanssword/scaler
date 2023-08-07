@@ -132,7 +132,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.mu.Unlock()
 
 	defer func() {
-		// log.Printf("Assign, request id: %s, instance id: %s, cost %dms", request.RequestId, instanceId, time.Since(start).Milliseconds())
+		log.Printf("Assign, request id: %s, instance id: %s, cost %dms", request.RequestId, instanceId, time.Since(start).Milliseconds())
 	}()
 	// log.Printf("Assign, request id: %s", request.RequestId)
 	s.mu.Lock()
@@ -404,12 +404,13 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		slotId = instance.Slot.Id
 		instance.LastIdleTime = time.Now()
 		if needDestroy {
-			// log.Printf("request id %s, instance %s need be destroy", request.Assigment.RequestId, instanceId)
+			log.Printf("request id %s, instance %s need be destroy", request.Assigment.RequestId, instanceId)
+			delete(s.instances, instance.Id)
 			return reply, nil
 		}
 
 		if instance.Busy == false {
-			// log.Printf("request id %s, instance %s already freed", request.Assigment.RequestId, instanceId)
+			log.Printf("request id %s, instance %s already freed", request.Assigment.RequestId, instanceId)
 			return reply, nil
 		}
 		instance.Busy = false
