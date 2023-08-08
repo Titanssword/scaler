@@ -203,9 +203,9 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 			config.GM.RW.Unlock()
 		}
 	}
+	log.Printf(`【create】request id: %s, instance %s for app %s is created, init latency: %dms, idle len: %d, create s.wrongDecisionCnt: %d, (requestTime - s.lastNeedDestoryTime): %d`,
+		request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs, s.idleInstance.Len(), s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime))
 	s.mu.Unlock()
-	log.Printf("request id: %s, instance %s for app %s is created, init latency: %dms, idle len: %d", request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs, s.idleInstance.Len())
-
 	return &pb.AssignReply{
 		Status: pb.Status_Ok,
 		Assigment: &pb.Assignment{
@@ -318,12 +318,13 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	lastMinQPS = cnt/s.qpsEntityList.Len() + 1
 	// 启动时间 + 执行时间 + idle时间（近似20ms）
 	durationPerPod := float64(data3Duration + 20)
-	if durationPerPod > 1 {
-		// 如果1s 中处理m个，那么 n qps 需要 n/m 个pod就够
-		balancePodNums = int(float64(lastMinQPS) / (1000 / durationPerPod))
-	} else {
-		balancePodNums = int(float64(lastMinQPS) * (durationPerPod / 1000))
-	}
+	balancePodNums = int(float32(lastMinQPS)/float32(1000/durationPerPod)) + 1
+	// if durationPerPod > 1000 {
+	// 	// 如果1s 中处理m个，那么 n qps 需要 n/m 个pod就够
+	// 	balancePodNums = int(float64(lastMinQPS) / (1000 / durationPerPod))
+	// } else {
+	// 	balancePodNums = int(float64(lastMinQPS) * (durationPerPod / 1000))
+	// }
 
 	if ok && ok2 && ok3 && curIdlePodNums > 1 && curIdlePodNums >= balancePodNums {
 		// 初始化时间+执行时间+调用时间
@@ -389,7 +390,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		requestTime, requestTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
 		curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
 		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime)
-	log.Printf("score: %f, a: %f, b: %f, c: %f, d: %f, wrong descion cnt: %d", score, a, b, c, d, config.GM.GlobalWrongDesicionCnt)
+	config.GM.RW.Lock()
+	log.Printf("score: %f, a: %f, b: %f, c: %f, d: %f, Global wrong descion cnt: %d", score, a, b, c, d, config.GM.GlobalWrongDesicionCnt)
+	config.GM.RW.Unlock()
 	// s.mu.Unlock()
 	defer func() {
 		if needDestroy {
