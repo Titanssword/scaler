@@ -197,15 +197,16 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	_, ok := config.Meta3Memory[request.MetaData.Key]
 	_, ok2 := config.Meta3InitDurationMs[request.MetaData.Key]
 	if ok && ok2 {
-		if (requestTime - s.lastNeedDestoryTime) < 10*60*1000 {
+		if 0 < (requestTime-s.lastNeedDestoryTime) && (requestTime-s.lastNeedDestoryTime) < 10*60*1000 {
 			s.wrongDecisionCnt = s.wrongDecisionCnt + 1
 			config.GM.RW.Lock()
 			config.GM.GlobalWrongDesicionCnt = config.GM.GlobalWrongDesicionCnt + 1
 			config.GM.RW.Unlock()
 		}
 	}
-	log.Printf(`【create】request id: %s, instance %s for app %s is created, init latency: %dms, idle len: %d, create s.wrongDecisionCnt: %d, (requestTime - s.lastNeedDestoryTime): %d`,
-		request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs, idleLen, s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime))
+	log.Printf(`【create】request id: %s, instance %s for app %s is created, init latency: %dms, 
+	idle len: %d, create s.wrongDecisionCnt: %d, (requestTime - s.lastNeedDestoryTime): %d, s.lastNeedDestoryTime: %d`,
+		request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs, idleLen, s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime), s.lastNeedDestoryTime)
 	s.mu.Unlock()
 	return &pb.AssignReply{
 		Status: pb.Status_Ok,
