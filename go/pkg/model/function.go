@@ -24,13 +24,19 @@ type Meta struct {
 }
 
 type Instance struct {
-	Id               string
-	Slot             *Slot
-	Meta             *Meta
-	CreateTimeInMs   int64
-	InitDurationInMs int64
-	Busy             bool
-	LastIdleTime     time.Time
+	Id                 string
+	Slot               *Slot
+	Meta               *Meta
+	CreateTimeInMs     int64
+	InitDurationInMs   int64
+	Busy               bool
+	LastIdleTime       time.Time
+	CreateTime         int64
+	ExecutionTimes     int64
+	ExecutionStartTime int64
+	ExecutionEndTime   int64
+	SchedueTime        int64
+	IdleTime           int64
 }
 
 type QpsEntity struct {

@@ -35,8 +35,20 @@ type Try struct {
 	directRemoveCnt int // 越大，资源分越高
 	gcRemoveCnt     int // 越大，冷启动分高
 	curIntanceCnt   int
-	// resourceUsageScore int
-	// resourceUsageScore int
+	// resourceUsageScore = (data["invocationExecutionTimeInGBs"] / data["totalSlotTimeInGBs"]) * 50
+	// coldStartTimeScore = (data["invocationExecutionTimeInSecs"] / (data["invocationExecutionTimeInSecs"] + data["invocationScheduleTimeInSecs"] + data["invocationIdleTimeInSecs"]) )* 50
+	resourceUsageScore           float64
+	totalSlotTimeInGBs           float64
+	invocationExecutionTimeInGBs float64
+
+	coldStartTimeScore            float64
+	invocationExecutionTimeInSecs float64
+	// invocationScheduleTimeInSecs  float64
+	// invocationIdleTimeInSecs      float64
+	invocationAllTime float64
+
+	memoryInMb   int
+	durationInit int
 	// reused  int // 越大，冷启动分高,节省 init time
 	// created int // 越大，资源分高， 节省 resource cost
 	// 理想状态, reused 少了，需要降低directRemoveCnt, created 少了，需要提高directRemoveCnt
@@ -48,13 +60,15 @@ type Try struct {
 	lastTime            int64
 }
 
-func NewV2(metaData *model.Meta, config *config.Config) Scaler {
-	client, err := platform_client.New(config.ClientAddr)
+func NewV2(metaData *model.Meta, c *config.Config) Scaler {
+	client, err := platform_client.New(c.ClientAddr)
 	if err != nil {
 		log.Fatalf("client init with error: %s", err.Error())
 	}
+	memory, ok := config.Meta3Memory[metaData.Key]
+	init, ok2 := config.Meta3InitDurationMs[metaData.Key]
 	scheduler := &Try{
-		config:         config,
+		config:         c,
 		metaData:       metaData,
 		platformClient: client,
 		mu:             sync.Mutex{},
@@ -71,6 +85,10 @@ func NewV2(metaData *model.Meta, config *config.Config) Scaler {
 		lastQPS:          0,
 		lastTime:         0,
 		// lastMinQPS:       0,
+	}
+	if ok && ok2 {
+		scheduler.memoryInMb = memory
+		scheduler.durationInit = init
 	}
 	log.Printf("New scaler for app: %s is created", metaData.Key)
 	scheduler.wg.Add(1)
@@ -144,6 +162,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		instance := element.Value.(*model.Instance)
 		instance.Busy = true
 		s.idleInstance.Remove(element)
+		instance.SchedueTime = time.Now().Unix() - requestTime
 		s.mu.Unlock()
 		log.Printf("Assign, metakey: %s, request id: %s, instance %s reused", request.MetaData.Key, request.RequestId, instance.Id)
 		instanceId = instance.Id
@@ -194,19 +213,21 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.curIntanceCnt = s.curIntanceCnt + 1
 
 	// 惩罚点, 在允许范围时间内，早删除了实例
-	_, ok := config.Meta3Memory[request.MetaData.Key]
-	_, ok2 := config.Meta3InitDurationMs[request.MetaData.Key]
-	if ok && ok2 {
-		if 0 < (requestTime-s.lastNeedDestoryTime) && (requestTime-s.lastNeedDestoryTime) < 10*60*1000 {
+	if s.memoryInMb != 0 && s.durationInit != 0 {
+		if s.lastNeedDestoryTime != 0 && 0 < (requestTime-s.lastNeedDestoryTime) && (requestTime-s.lastNeedDestoryTime) < 10*60*1000 {
 			s.wrongDecisionCnt = s.wrongDecisionCnt + 1
 			config.GM.RW.Lock()
 			config.GM.GlobalWrongDesicionCnt = config.GM.GlobalWrongDesicionCnt + 1
 			config.GM.RW.Unlock()
 		}
 	}
-	log.Printf(`【create】request id: %s, instance %s for app %s is created, init latency: %dms, 
-	idle len: %d, create s.wrongDecisionCnt: %d, (requestTime - s.lastNeedDestoryTime): %d, s.lastNeedDestoryTime: %d`,
-		request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs, idleLen, s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime), s.lastNeedDestoryTime)
+	instance.SchedueTime = time.Now().Unix() - requestTime
+	instance.CreateTime = requestTime
+	log.Printf(`[create-instance] request id: %s, instance %s for app %s is created, init latency: %dms, 
+	idle len: %d, create s.wrongDecisionCnt: %d, (requestTime - s.lastNeedDestoryTime): %d, s.lastNeedDestoryTime: %d,
+	SchedueTime: %d`,
+		request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs,
+		idleLen, s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime), s.lastNeedDestoryTime, instance.SchedueTime)
 	s.mu.Unlock()
 	return &pb.AssignReply{
 		Status: pb.Status_Ok,
@@ -289,8 +310,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// 针对数据集3 做优化
 	data3Duration, ok := config.Meta3Duration[request.Assigment.MetaKey]
 	// dd, _ := json.Marshal(data3Duration)
-	data3Memory, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
-	data3InitDuration, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
+	data3Memory := s.memoryInMb
+	data3InitDuration := s.durationInit
 	// dm, _ := json.Marshal(data3Memory)
 	// log.Printf("data3Duration: %v, data3Memory: %v, qpsEntityList: %v", data3Duration, data3Memory, s.qpsEntityList.Len())
 	// var curQPS int
@@ -328,7 +349,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// 	balancePodNums = int(float64(lastMinQPS) * (durationPerPod / 1000))
 	// }
 
-	if ok && ok2 && ok3 && curIdlePodNums > 1 && curIdlePodNums >= balancePodNums {
+	if ok && data3Memory != 0 && data3InitDuration != 0 && curIdlePodNums > 1 && curIdlePodNums >= balancePodNums {
 		// 初始化时间+执行时间+调用时间
 		// coldAllTime := (data3Duration + float64(data3InitDuration)) + 20
 		// balancePodNums = int(float32(lastMinQPS)/float32(1000/coldAllTime)) + 1
@@ -354,7 +375,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			if d >= 0.4 {
 				needDestroy = true
 			} else {
-				if c >= 0.4 {
+				if c > 0.5 {
 					needDestroy = true
 				}
 			}
@@ -362,14 +383,16 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			if d >= 0.4 {
 				needDestroy = true
 			} else {
-				if c >= 0.4 {
+				if c > 0.5 {
 					needDestroy = true
 				}
 			}
 		}
-		total := s.directRemoveCnt + s.gcRemoveCnt
-		if total != 0 {
-			b = float64((total - s.wrongDecisionCnt) / total)
+		// total := s.directRemoveCnt + s.gcRemoveCnt
+		if s.directRemoveCnt > s.wrongDecisionCnt {
+			b = float64((s.directRemoveCnt - s.wrongDecisionCnt) / s.directRemoveCnt)
+		} else {
+			b = 0
 		}
 		// // 修正
 		// if b < 0.9 {
@@ -407,10 +430,12 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// s.mu.Lock()
 	defer s.mu.Unlock()
 	if instance := s.instances[instanceId]; instance != nil {
+		instance.ExecutionEndTime = requestTime
 		slotId = instance.Slot.Id
 		instance.LastIdleTime = time.Now()
 		if needDestroy {
-			log.Printf("request id %s, instance %s need be destroy", request.Assigment.RequestId, instanceId)
+			calScore(s, instance, time.Now().Unix())
+			log.Printf("request id %s, instance %s need be destroy, execTime: %d", request.Assigment.RequestId, instanceId, instance.ExecutionTimes)
 			delete(s.instances, instance.Id)
 			return reply, nil
 		}
@@ -449,10 +474,13 @@ func (s *Try) gcLoop() {
 			if element := s.idleInstance.Back(); element != nil {
 				instance := element.Value.(*model.Instance)
 				idleDuration := time.Now().Sub(instance.LastIdleTime)
+				nowTime := time.Now().Unix()
 				if idleDuration > *s.config.IdleDurationBeforeGC {
 					//need GC
 					s.idleInstance.Remove(element)
 					delete(s.instances, instance.Id)
+					// 更新score
+					calScore(s, instance, nowTime)
 					s.mu.Unlock()
 					go func() {
 						reason := fmt.Sprintf("Idle duration: %fs, excceed configured duration: %fs", idleDuration.Seconds(), (*s.config.IdleDurationBeforeGC).Seconds())
@@ -469,6 +497,23 @@ func (s *Try) gcLoop() {
 			break
 		}
 	}
+}
+
+func calScore(s *Try, instance *model.Instance, nowTime int64) {
+	// 实例执行 时间 * 存储
+	s.invocationExecutionTimeInGBs = s.invocationExecutionTimeInGBs + (float64(instance.ExecutionTimes) * float64(s.memoryInMb) / 1000)
+	// 实例销毁时间-创建时间 = 存在时间 * 存储
+	s.totalSlotTimeInGBs = s.totalSlotTimeInGBs + float64(float64(nowTime-instance.CreateTime)*float64(s.memoryInMb)/1000)
+	// 资源得分
+	s.resourceUsageScore = (s.invocationExecutionTimeInGBs / s.totalSlotTimeInGBs) * 50
+	// 实例执行时间
+	s.invocationExecutionTimeInSecs = s.invocationExecutionTimeInSecs + float64(instance.ExecutionTimes)
+	// 实例冷启动时间
+	allTimePerInstance := s.invocationExecutionTimeInSecs + float64(instance.InitDurationInMs/1000)
+	s.invocationAllTime = s.invocationAllTime + allTimePerInstance
+	// 冷启动得分
+	s.coldStartTimeScore = (s.invocationExecutionTimeInSecs / s.invocationAllTime) * 50
+	log.Printf("meta key: %s, resourceUsageScore: %f, coldStartTimeScore: %f", s.metaData.Key, s.resourceUsageScore, s.coldStartTimeScore)
 }
 
 func (s *Try) Stats() Stats {
