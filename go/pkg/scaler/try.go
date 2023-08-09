@@ -138,7 +138,8 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.mu.Lock()
 	element := s.idleInstance.Front()
 	trsbytes, _ := json.Marshal(element)
-	log.Printf("[assign] idle element: %s, idel len: %d", string(trsbytes), s.idleInstance.Len())
+	idleLen := s.idleInstance.Len()
+	log.Printf("[assign] request id: %s, idle element: %s, idel len: %d", request.RequestId, string(trsbytes), idleLen)
 	if element := s.idleInstance.Front(); element != nil {
 		instance := element.Value.(*model.Instance)
 		instance.Busy = true
@@ -204,7 +205,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		}
 	}
 	log.Printf(`【create】request id: %s, instance %s for app %s is created, init latency: %dms, idle len: %d, create s.wrongDecisionCnt: %d, (requestTime - s.lastNeedDestoryTime): %d`,
-		request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs, s.idleInstance.Len(), s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime))
+		request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs, idleLen, s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime))
 	s.mu.Unlock()
 	return &pb.AssignReply{
 		Status: pb.Status_Ok,
@@ -383,12 +384,12 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	} else {
 		s.gcRemoveCnt = s.gcRemoveCnt + 1
 	}
-	log.Printf(`Idle, metaKey: %s, s.wrongDecisionCnt: %d, instance: %s, 
+	log.Printf(`Idle, request id: %s, metaKey: %s, s.wrongDecisionCnt: %d, instance: %s, 
 	requestTime: %d,  cur.time: %d, data3Duration: %f, data3InitDuration:%d, 
 	data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, 
 	balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, directRemoveCnt: %v, 
 	gcRemoveCnt: %v, durationPerPod: %f,request.Result.NeedDestroy: %v, lastNeedDestoryTime: %v`,
-		request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId,
+		request.Assigment.RequestId, request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId,
 		requestTime, requestTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
 		curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
 		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime)
