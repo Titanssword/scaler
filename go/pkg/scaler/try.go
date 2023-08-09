@@ -228,6 +228,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	}
 	instance.SchedueTime = time.Now().Unix() - requestTime
 	instance.CreateTime = requestTime
+	instance.ExecutionStartTime = time.Now().Unix()
 	log.Printf(`[create-instance] request id: %s, instance %s for app %s is created, init latency: %dms, 
 	idle len: %d, create s.wrongDecisionCnt: %d, (requestTime - s.lastNeedDestoryTime): %d, s.lastNeedDestoryTime: %d,
 	SchedueTime: %d`,
@@ -519,7 +520,10 @@ func calScore(s *Try, instance *model.Instance, nowTime int64) {
 	s.invocationAllTime = s.invocationAllTime + allTimePerInstance
 	// 冷启动得分
 	s.coldStartTimeScore = (s.invocationExecutionTimeInSecs / s.invocationAllTime) * 50
-	log.Printf("meta key: %s, resourceUsageScore: %f, coldStartTimeScore: %f", s.metaData.Key, s.resourceUsageScore, s.coldStartTimeScore)
+	log.Printf(`meta key: %s, invocationExecutionTimeInGBs: %f, totalSlotTimeInGBs: %f, resourceUsageScore: %f,
+	 coldStartTimeScore: %f, invocationExecutionTimeInSecs: %f, invocationAllTime: %f`,
+		s.metaData.Key, s.invocationExecutionTimeInGBs, s.invocationAllTime, s.resourceUsageScore, s.coldStartTimeScore,
+		s.invocationExecutionTimeInSecs, s.invocationAllTime)
 }
 
 func (s *Try) Stats() Stats {
