@@ -219,7 +219,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 
 	// 惩罚点, 在允许范围时间内，早删除了实例
 	if s.memoryInMb != 0 && s.durationInit != 0 {
-		if s.lastNeedDestoryTime != 0 && 0 < (requestTime-s.lastNeedDestoryTime) && (requestTime-s.lastNeedDestoryTime) < 10*60*1000 {
+		if s.lastNeedDestoryTime != 0 && 0 < (requestTime-s.lastNeedDestoryTime) && (requestTime-s.lastNeedDestoryTime) < 5*60*1000 {
 			s.wrongDecisionCnt = s.wrongDecisionCnt + 1
 			config.GM.RW.Lock()
 			config.GM.GlobalWrongDesicionCnt = config.GM.GlobalWrongDesicionCnt + 1
@@ -355,7 +355,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// 	balancePodNums = int(float64(lastMinQPS) * (durationPerPod / 1000))
 	// }
 
-	if ok && data3Memory != 0 && data3InitDuration != 0 && curIdlePodNums > 1 && curIdlePodNums >= balancePodNums {
+	if ok && data3Memory != 0 && data3InitDuration != 0 && curIdlePodNums > 2 && curIdlePodNums >= balancePodNums {
 		// 初始化时间+执行时间+调用时间
 		// coldAllTime := (data3Duration + float64(data3InitDuration)) + 20
 		// balancePodNums = int(float32(lastMinQPS)/float32(1000/coldAllTime)) + 1
@@ -400,10 +400,10 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		} else {
 			b = 0
 		}
-		// // 修正
-		// if b < 0.9 {
-		// 	needDestroy = false
-		// }
+		// 修正
+		if b < 0.9 {
+			needDestroy = false
+		}
 	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
@@ -522,7 +522,7 @@ func calScore(s *Try, instance *model.Instance, nowTime int64) {
 	s.coldStartTimeScore = (s.invocationExecutionTimeInSecs / s.invocationAllTime) * 50
 	log.Printf(`meta key: %s, invocationExecutionTimeInGBs: %f, totalSlotTimeInGBs: %f, resourceUsageScore: %f,
 	 coldStartTimeScore: %f, invocationExecutionTimeInSecs: %f, invocationAllTime: %f`,
-		s.metaData.Key, s.invocationExecutionTimeInGBs, s.invocationAllTime, s.resourceUsageScore, s.coldStartTimeScore,
+		s.metaData.Key, s.invocationExecutionTimeInGBs, s.totalSlotTimeInGBs, s.resourceUsageScore, s.coldStartTimeScore,
 		s.invocationExecutionTimeInSecs, s.invocationAllTime)
 }
 
