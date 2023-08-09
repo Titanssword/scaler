@@ -334,6 +334,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	var b float64 = 1.0
 	var c float64 = 0.0
 	var d float64 = 0.0
+	thresholdD := 0.5
+	thresholdC := 0.5
+	thresholdA := 0.5
 	cnt := 0
 	// 最近1分钟的数量
 	lastMinQPS := 0
@@ -377,32 +380,28 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// if score >= 1 {
 		// 	needDestroy = true
 		// }
-		if a >= 0.5 {
-			if d >= 0.4 {
-				needDestroy = true
-			} else {
-				if c > 0.5 {
-					needDestroy = true
-				}
-			}
-		} else {
-			if d >= 0.4 {
-				needDestroy = true
-			} else {
-				if c > 0.5 {
-					needDestroy = true
-				}
-			}
-		}
+
 		// total := s.directRemoveCnt + s.gcRemoveCnt
+
 		if s.directRemoveCnt > s.wrongDecisionCnt {
 			b = float64((s.directRemoveCnt - s.wrongDecisionCnt) / s.directRemoveCnt)
 		} else {
 			b = 0
 		}
-		// 修正
-		if b < 0.9 {
-			needDestroy = false
+		if a >= thresholdA {
+			thresholdC = 0.4
+			thresholdD = 0.3
+		}
+		if b != 0 && b < 0.8 {
+			thresholdD = 0.8
+			thresholdC = 1.0
+		}
+		if d >= thresholdD {
+			needDestroy = true
+		} else {
+			if c >= thresholdC {
+				needDestroy = true
+			}
 		}
 	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
@@ -418,13 +417,14 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	requestTime: %d,  cur.time: %d, data3Duration: %f, data3InitDuration:%d, 
 	data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, 
 	balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, directRemoveCnt: %v, 
-	gcRemoveCnt: %v, durationPerPod: %f,request.Result.NeedDestroy: %v, lastNeedDestoryTime: %v`,
+	gcRemoveCnt: %v, durationPerPod: %f,request.Result.NeedDestroy: %v, lastNeedDestoryTime: %v, Global wrong descion cnt: %d`,
 		request.Assigment.RequestId, request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId,
 		requestTime, requestTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
 		curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
-		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime)
+		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime, config.GM.GlobalWrongDesicionCnt)
 	config.GM.RW.Lock()
-	log.Printf("score: %f, a: %f, b: %f, c: %f, d: %f, Global wrong descion cnt: %d", score, a, b, c, d, config.GM.GlobalWrongDesicionCnt)
+	log.Printf(`score: %f, a: %f, b: %f, c: %f, d: %f, thresholdA: %f, thresholdC: %f, thresholdD: %f`,
+		score, a, b, c, d, thresholdA, thresholdC, thresholdD)
 	config.GM.RW.Unlock()
 	// s.mu.Unlock()
 	defer func() {
@@ -437,7 +437,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	defer s.mu.Unlock()
 	if instance := s.instances[instanceId]; instance != nil {
 		instance.ExecutionEndTime = requestTime
-		instance.ExecutionTimes = instance.ExecutionEndTime - instance.ExecutionStartTime
+		instance.ExecutionTimes = instance.ExecutionTimes + (instance.ExecutionEndTime - instance.ExecutionStartTime)
 		slotId = instance.Slot.Id
 		instance.LastIdleTime = time.Now()
 		if needDestroy {

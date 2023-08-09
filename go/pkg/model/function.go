@@ -32,7 +32,7 @@ type Instance struct {
 	Busy               bool
 	LastIdleTime       time.Time
 	CreateTime         int64
-	ExecutionTimes     int64
+	ExecutionTimes     int64 // 该实例执行时间，如果被重复利用，则累计
 	ExecutionStartTime int64
 	ExecutionEndTime   int64
 	SchedueTime        int64
