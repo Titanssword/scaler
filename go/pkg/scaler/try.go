@@ -77,13 +77,18 @@ func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 		idleInstance:   list.New(),
 		// qpsList:        make([]int64, 100000000),
 		// startPoint:     1680278400,
-		qpsEntityList:    list.New(),
-		directRemoveCnt:  0,
-		gcRemoveCnt:      0,
-		curIntanceCnt:    0,
-		wrongDecisionCnt: 0,
-		lastQPS:          0,
-		lastTime:         0,
+		qpsEntityList:                 list.New(),
+		directRemoveCnt:               0,
+		gcRemoveCnt:                   0,
+		curIntanceCnt:                 0,
+		wrongDecisionCnt:              0,
+		lastQPS:                       0,
+		lastTime:                      0,
+		resourceUsageScore:            0,
+		totalSlotTimeInGBs:            0,
+		invocationExecutionTimeInGBs:  0,
+		coldStartTimeScore:            0,
+		invocationExecutionTimeInSecs: 0,
 		// lastMinQPS:       0,
 	}
 	if ok && ok2 {
@@ -431,6 +436,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	defer s.mu.Unlock()
 	if instance := s.instances[instanceId]; instance != nil {
 		instance.ExecutionEndTime = requestTime
+		instance.ExecutionTimes = instance.ExecutionEndTime - instance.ExecutionStartTime
 		slotId = instance.Slot.Id
 		instance.LastIdleTime = time.Now()
 		if needDestroy {
