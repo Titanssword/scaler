@@ -358,7 +358,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// 	balancePodNums = int(float64(lastMinQPS) * (durationPerPod / 1000))
 	// }
 
-	if ok && data3Memory != 0 && data3InitDuration != 0 && curIdlePodNums > 2 && curIdlePodNums >= balancePodNums {
+	if ok && data3Memory != 0 && data3InitDuration != 0 && curIdlePodNums > 0 && curIdlePodNums >= balancePodNums {
 		// 初始化时间+执行时间+调用时间
 		// coldAllTime := (data3Duration + float64(data3InitDuration)) + 20
 		// balancePodNums = int(float32(lastMinQPS)/float32(1000/coldAllTime)) + 1
@@ -389,7 +389,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			b = 0
 		}
 		if a >= thresholdA {
-			thresholdC = 0.4
+			thresholdC = 0.3
 			thresholdD = 0.3
 		}
 		if b != 0 && b < 0.8 {
