@@ -372,10 +372,10 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if lastMinQPS != 0 {
 			d = 0.5 * float64(curIdlePodNums) / float64(lastMinQPS)
 		}
-		// 空闲大于期望
-		if balancePodNums != 0 {
-			c = 0.5 * float64(curIdlePodNums/balancePodNums)
-		}
+		// // 空闲大于期望
+		// if balancePodNums != 0 {
+		// 	c = 0.5 * float64(curIdlePodNums/balancePodNums)
+		// }
 		// score = a + b + c + d
 		// if score >= 1 {
 		// 	needDestroy = true
@@ -398,11 +398,12 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		}
 		if d >= thresholdD {
 			needDestroy = true
-		} else {
-			if c >= thresholdC {
-				needDestroy = true
-			}
 		}
+		// } else {
+		// if c >= thresholdC {
+		// 	needDestroy = true
+		// }
+		// }
 	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
