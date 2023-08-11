@@ -334,7 +334,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	var b float64 = 1.0
 	var c float64 = 0.0
 	var d float64 = 0.0
-	thresholdD := 0.5
+	thresholdD := 0.3
 	thresholdC := 0.5
 	thresholdA := 0.5
 	cnt := 0
@@ -390,10 +390,10 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		}
 		if a >= thresholdA {
 			thresholdC = 0.3
-			thresholdD = 0.3
+			thresholdD = 0.2
 		}
 		if b != 0 && b < 0.8 {
-			thresholdD = 0.8
+			thresholdD = 0.5
 			thresholdC = 1.0
 		}
 		if d >= thresholdD {
