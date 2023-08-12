@@ -152,7 +152,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		instance.Busy = true
 		s.idleInstance.Remove(element)
 		s.mu.Unlock()
-		log.Printf("Assign, metakey: %s, request id: %s, instance %s reused", request.MetaData.Key, request.RequestId, instance.Id)
+		//log.Printf("Assign, metakey: %s, request id: %s, instance %s reused", request.MetaData.Key, request.RequestId, instance.Id)
 		instanceId = instance.Id
 		return &pb.AssignReply{
 			Status: pb.Status_Ok,
@@ -192,7 +192,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		log.Printf(errorMessage)
 		return nil, status.Errorf(codes.Internal, errorMessage)
 	}
-	log.Printf("Assign, metakey: %s, request id: %s, instance %s create new", request.MetaData.Key, request.RequestId, instance.Id)
+	//log.Printf("Assign, metakey: %s, request id: %s, instance %s create new", request.MetaData.Key, request.RequestId, instance.Id)
 
 	//add new instance
 	s.mu.Lock()
@@ -314,7 +314,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		*/
 		idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
 		if idleTime > float32(data3InitDurationMs) {
-			saveCost := (idleTime - float32(data3InitDurationMs)) * float32(data3MemoryMb)
+			saveCost := (idleTime - float32(data3InitDurationMs)) / 1000.0 * float32(data3MemoryMb) / 1024.0
 			if totalInitTimeTmp < 2000 {
 				setTotalSave(saveCost)
 				needDestroy = true
@@ -331,6 +331,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 					needDestroy = true
 				}
 			}
+			log.Printf("【Idle】metaKey: %s, idleLen: %d, avgQPS: %f, idleTime: %f, saveCost: %f, avgSaveCost: %f, totalInitTime: %f, needDestroy: %v",
+				request.Assigment.MetaKey, s.idleInstance.Len(), avgQPS, idleTime, saveCost, avgSaveCost, totalInitTimeTmp, needDestroy)
 		}
 		/*
 			如果初始化slot总耗时超过10000秒，则不希望再初始化，needDestroy = false
@@ -344,8 +346,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		needDestroy = true
 	}
 
-	log.Printf("【Idle】metaKey: %s, data3MemoryMb: %d, avgQPS: %f, avgSaveCost: %f, s.idleInstance.Len(): %d, needDestroy: %v",
-		request.Assigment.MetaKey, data3MemoryMb, avgQPS, avgSaveCost, s.idleInstance.Len(), needDestroy)
+	//log.Printf("【Idle】metaKey: %s, data3MemoryMb: %d, avgQPS: %f, avgSaveCost: %f, s.idleInstance.Len(): %d, needDestroy: %v",
+	//	request.Assigment.MetaKey, data3MemoryMb, avgQPS, avgSaveCost, s.idleInstance.Len(), needDestroy)
 
 	defer func() {
 		if needDestroy {
