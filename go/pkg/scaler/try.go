@@ -334,7 +334,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	var b float64 = 1.0
 	var c float64 = 0.0
 	var d float64 = 0.0
-	thresholdD := 0.3
+	thresholdD := 0.5
 	thresholdC := 0.5
 	thresholdA := 0.5
 	cnt := 0
@@ -348,6 +348,15 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	}
 
 	lastMinQPS = cnt/s.qpsEntityList.Len() + 1
+	// 最近一秒的qps
+	thisSecondQPS := 0
+	it := s.qpsEntityList.Front()
+	if it != nil {
+		qpsentity := it.Value.(*model.QpsEntity)
+		if qpsentity.CurrentTime <= requestTime {
+			thisSecondQPS = qpsentity.QPS
+		}
+	}
 	// 启动时间 + 执行时间 + idle时间（近似20ms）
 	durationPerPod := float64(data3Duration + 20)
 	balancePodNums = int(float32(lastMinQPS)/float32(1000/durationPerPod)) + 1
@@ -358,7 +367,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// 	balancePodNums = int(float64(lastMinQPS) * (durationPerPod / 1000))
 	// }
 
-	if ok && data3Memory != 0 && data3InitDuration != 0 && curIdlePodNums > 0 && curIdlePodNums >= balancePodNums {
+	if ok && data3Memory != 0 && data3InitDuration != 0 && curIdlePodNums > 0 {
 		// 初始化时间+执行时间+调用时间
 		// coldAllTime := (data3Duration + float64(data3InitDuration)) + 20
 		// balancePodNums = int(float32(lastMinQPS)/float32(1000/coldAllTime)) + 1
@@ -370,7 +379,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		}
 		// 空闲大于当前qps
 		if lastMinQPS != 0 {
-			d = 0.5 * float64(curIdlePodNums) / float64(lastMinQPS)
+			d = 0.5 * float64(curIdlePodNums) / float64(lastMinQPS-thisSecondQPS)
 		}
 		// // 空闲大于期望
 		// if balancePodNums != 0 {
@@ -383,19 +392,19 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 
 		// total := s.directRemoveCnt + s.gcRemoveCnt
 
-		if s.directRemoveCnt > s.wrongDecisionCnt {
-			b = float64((s.directRemoveCnt - s.wrongDecisionCnt) / s.directRemoveCnt)
-		} else {
-			b = 0
-		}
-		if a >= thresholdA {
-			thresholdC = 0.3
-			thresholdD = 0.2
-		}
-		if b != 0 && b < 0.8 {
-			thresholdD = 0.5
-			thresholdC = 1.0
-		}
+		//if s.directRemoveCnt > s.wrongDecisionCnt {
+		//b = float64((s.directRemoveCnt - s.wrongDecisionCnt) / s.directRemoveCnt)
+		//} else {
+		//b = 0
+		//}
+		//if a >= thresholdA {
+		//thresholdC = 0.3
+		//thresholdD = 0.2
+		//}
+		//if b != 0 && b < 0.8 {
+		//thresholdD = 0.5
+		//thresholdC = 1.0
+		//}
 		if d >= thresholdD {
 			needDestroy = true
 		}
@@ -423,10 +432,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		requestTime, requestTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
 		curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
 		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime, config.GM.GlobalWrongDesicionCnt)
-	config.GM.RW.Lock()
 	log.Printf(`score: %f, a: %f, b: %f, c: %f, d: %f, thresholdA: %f, thresholdC: %f, thresholdD: %f`,
 		score, a, b, c, d, thresholdA, thresholdC, thresholdD)
-	config.GM.RW.Unlock()
 	// s.mu.Unlock()
 	defer func() {
 		if needDestroy {
