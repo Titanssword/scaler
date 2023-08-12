@@ -18,9 +18,27 @@ import (
 )
 
 var (
-	totalLock             = sync.RWMutex{}
-	totalInitTime float32 = 0.0
+	totalLock              = sync.RWMutex{}
+	totalInitTime  float32 = 0.0
+	totalLock2             = sync.RWMutex{}
+	totalSaveCost  float32 = 0.0
+	totalSaveTimes float32 = 0.0
 )
+
+func getTotalSave() (float32, float32) {
+	totalLock2.RLock()
+	defer totalLock2.RUnlock()
+	totalSaveCostTmp := totalSaveCost
+	totalSaveTimesTmp := totalSaveTimes
+	return totalSaveCostTmp, totalSaveTimesTmp
+}
+
+func setTotalSave(saveCost float32) {
+	totalLock2.Lock()
+	defer totalLock2.Unlock()
+	totalSaveCost += saveCost
+	totalSaveTimes += 1
+}
 
 type Try struct {
 	config         *config.Config
@@ -270,10 +288,11 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// }
 
 	// 针对数据集3 做优化
-	data3Duration, ok1 := config.Meta3Duration[request.Assigment.MetaKey]
+	_, ok1 := config.Meta3Duration[request.Assigment.MetaKey]
 	data3MemoryMb, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
 	data3InitDurationMs, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
 
+	var avgSaveCost float32
 	avgQPS := s.GetAvgQPS()
 	if ok1 && ok2 && ok3 && avgQPS > 0 {
 		/*
@@ -290,19 +309,33 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			needDestroy = true
 		}
 		/*
-			优先释放 init time 小，同时 memory 大的实例
-			空闲时间 > 初始化时间，则直接删除
+			如果选择直接销毁，可以节省很多代价，那么就选择销毁
+			前期只要有节省就销毁，中期必须超过节省代价的平均值120%才有销毁的意义，后期超过平均值150%就销毁
 		*/
-		if data3InitDurationMs < 200 && float32(data3MemoryMb)/float32(data3InitDurationMs) > 2.0 {
-			idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
-			if idleTime > float32(data3InitDurationMs) && s.idleInstance.Len() > 1 {
+		idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
+		if idleTime > float32(data3InitDurationMs) {
+			saveCost := (idleTime - float32(data3InitDurationMs)) * float32(data3MemoryMb)
+			if totalInitTimeTmp < 2000 {
+				setTotalSave(saveCost)
 				needDestroy = true
+			} else {
+				totalSaveCostTmp, totalSaveTimesTmp := getTotalSave()
+				if totalSaveTimesTmp > 0 {
+					avgSaveCost = totalSaveCostTmp / totalSaveTimesTmp
+				}
+				if totalInitTimeTmp < 6000 && saveCost > avgSaveCost*1.20 {
+					setTotalSave(saveCost)
+					needDestroy = true
+				} else if saveCost > avgSaveCost*1.50 {
+					setTotalSave(saveCost)
+					needDestroy = true
+				}
 			}
 		}
 		/*
-			如果初始化slot总耗时超过5000秒，则不希望再初始化，needDestroy = false
+			如果初始化slot总耗时超过10000秒，则不希望再初始化，needDestroy = false
 		*/
-		if totalInitTimeTmp > 5000 {
+		if totalInitTimeTmp > 10000 {
 			needDestroy = false
 		}
 	}
@@ -311,8 +344,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		needDestroy = true
 	}
 
-	log.Printf("【Idle】metaKey: %s, data3Duration: %f, data3MemoryMb: %d, instance len: %d, avr qps: %f, s.idleInstance.Len(): %d, needDestroy: %v",
-		request.Assigment.MetaKey, data3Duration, data3MemoryMb, len(s.instances), avgQPS, s.idleInstance.Len(), needDestroy)
+	log.Printf("【Idle】metaKey: %s, data3MemoryMb: %d, avgQPS: %f, avgSaveCost: %f, s.idleInstance.Len(): %d, needDestroy: %v",
+		request.Assigment.MetaKey, data3MemoryMb, avgQPS, avgSaveCost, s.idleInstance.Len(), needDestroy)
 
 	defer func() {
 		if needDestroy {
