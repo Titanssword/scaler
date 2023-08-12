@@ -305,7 +305,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		/*
 			如果空闲实例数，超过了平均QPS，销毁也是情理之中（兜底）
 		*/
-		if float32(s.idleInstance.Len()) >= avgQPS {
+		if float32(s.idleInstance.Len()) >= avgQPS+1 {
 			needDestroy = true
 		}
 		/*
@@ -313,7 +313,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			前期只要有节省就销毁，中期必须超过节省代价的平均值120%才有销毁的意义，后期超过平均值150%就销毁
 		*/
 		idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
-		if idleTime > float32(data3InitDurationMs) {
+		if !needDestroy && idleTime > float32(data3InitDurationMs) {
 			saveCost := (idleTime - float32(data3InitDurationMs)) / 1000.0 * float32(data3MemoryMb) / 1024.0
 			if saveCost > 5 {
 				needDestroy = true
