@@ -404,11 +404,11 @@ func (s *Try) GetAvgQPS() float32 {
 			cur3 := s.qpsEntityList.Back().Prev().Prev().Value.(*model.QpsEntity)
 			avgQPSTotal += float32(cur3.QPS) / float32(cur2.CurrentTime-cur3.CurrentTime)
 			total++
-			//if s.qpsEntityList.Len() > 3 {
-			//	cur4 := s.qpsEntityList.Back().Prev().Prev().Prev().Value.(*model.QpsEntity)
-			//	avgQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
-			//	total++
-			//}
+			if s.qpsEntityList.Len() > 3 {
+				cur4 := s.qpsEntityList.Back().Prev().Prev().Prev().Value.(*model.QpsEntity)
+				avgQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
+				total++
+			}
 		}
 	}
 
