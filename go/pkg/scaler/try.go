@@ -305,7 +305,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		/*
 			如果空闲实例数，超过了平均QPS，销毁也是情理之中（兜底）
 		*/
-		if float32(s.idleInstance.Len()) >= avgQPS+1 {
+		if float32(s.idleInstance.Len()) >= avgQPS {
 			needDestroy = true
 		}
 		/*
