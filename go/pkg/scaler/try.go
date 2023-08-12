@@ -292,16 +292,16 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	data3MemoryMb, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
 	data3InitDurationMs, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
 
-	var avgSaveCost float32
+	//var avgSaveCost float32
 	avgQPS := s.GetAvgQPS()
 	if ok1 && ok2 && ok3 && avgQPS > 0 {
 		/*
 			获取初始化总耗时
 		*/
-		var totalInitTimeTmp float32
-		totalLock.RLock()
-		totalInitTimeTmp = totalInitTime
-		totalLock.RUnlock()
+		//var totalInitTimeTmp float32
+		//totalLock.RLock()
+		//totalInitTimeTmp = totalInitTime
+		//totalLock.RUnlock()
 		/*
 			如果空闲实例数，超过了平均QPS，销毁也是情理之中（兜底）
 		*/
@@ -315,31 +315,18 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
 		if idleTime > float32(data3InitDurationMs) {
 			saveCost := (idleTime - float32(data3InitDurationMs)) / 1000.0 * float32(data3MemoryMb) / 1024.0
-			if totalInitTimeTmp < 2000 {
-				setTotalSave(saveCost)
+			if saveCost > 5 {
 				needDestroy = true
-			} else {
-				totalSaveCostTmp, totalSaveTimesTmp := getTotalSave()
-				if totalSaveTimesTmp > 0 {
-					avgSaveCost = totalSaveCostTmp / totalSaveTimesTmp
-				}
-				if totalInitTimeTmp < 6000 && saveCost > avgSaveCost*1.20 {
-					setTotalSave(saveCost)
-					needDestroy = true
-				} else if saveCost > avgSaveCost*1.50 {
-					setTotalSave(saveCost)
-					needDestroy = true
-				}
 			}
-			log.Printf("【Idle】metaKey: %s, idleLen: %d, avgQPS: %f, idleTime: %f, saveCost: %f, avgSaveCost: %f, totalInitTime: %f, needDestroy: %v",
-				request.Assigment.MetaKey, s.idleInstance.Len(), avgQPS, idleTime, saveCost, avgSaveCost, totalInitTimeTmp, needDestroy)
+			log.Printf("【Idle】metaKey: %s, idleLen: %d, avgQPS: %f, idleTime: %f, saveCost: %f, needDestroy: %v",
+				request.Assigment.MetaKey, s.idleInstance.Len(), avgQPS, idleTime, saveCost, needDestroy)
 		}
 		/*
 			如果初始化slot总耗时超过10000秒，则不希望再初始化，needDestroy = false
 		*/
-		if totalInitTimeTmp > 10000 {
-			needDestroy = false
-		}
+		//if totalInitTimeTmp > 10000 {
+		//	needDestroy = false
+		//}
 	}
 
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
