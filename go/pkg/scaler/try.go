@@ -340,7 +340,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	var b float64 = 1.0
 	var c float64 = 0.0
 	var d float64 = 0.0
-	thresholdD := 0.6
+	thresholdD := 0.7
 	thresholdC := 0.5
 	thresholdA := 0.5
 	cnt := 0
@@ -390,7 +390,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		}
 		// 修改yuzhi
 		if a > 1 {
-			thresholdD = 0.5
+			thresholdD = 0.6
 		}
 		if d >= thresholdD {
 			needDestroy = true
