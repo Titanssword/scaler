@@ -3,7 +3,6 @@ package scaler
 import (
 	"container/list"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -143,12 +142,12 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	}
 
 	// 删除多余元素，位置1min的时间窗口
-	if s.qpsEntityList.Len() > 10 {
+	if s.qpsEntityList.Len() > 60 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
 	// 超出30min，也清除头
 	front := s.qpsEntityList.Front().Value.(*model.QpsEntity)
-	if front.CurrentTime < requestTime-10 {
+	if front.CurrentTime < requestTime-60 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
 
@@ -159,15 +158,16 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	}()
 	// log.Printf("Assign, request id: %s", request.RequestId)
 	s.mu.Lock()
-	element := s.idleInstance.Front()
-	trsbytes, _ := json.Marshal(element)
+	// element := s.idleInstance.Front()
+	// trsbytes, _ := json.Marshal(element)
 	idleLen := s.idleInstance.Len()
-	log.Printf("[assign] request id: %s, idle element: %s, idel len: %d", request.RequestId, string(trsbytes), idleLen)
+	// log.Printf("[assign] request id: %s, idle element: %s, idel len: %d", request.RequestId, string(trsbytes), idleLen)
 	if element := s.idleInstance.Front(); element != nil {
 		instance := element.Value.(*model.Instance)
 		instance.Busy = true
 		s.idleInstance.Remove(element)
 		instance.SchedueTime = time.Now().Unix() - requestTime
+		instance.ExecutionStartTime = time.Now().Unix()
 		s.mu.Unlock()
 		log.Printf("Assign, metakey: %s, request id: %s, instance %s reused", request.MetaData.Key, request.RequestId, instance.Id)
 		instanceId = instance.Id
@@ -266,7 +266,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	start := time.Now()
 	instanceId := request.Assigment.InstanceId
 	defer func() {
-		log.Printf("Idle, request id: %s, instance: %s, cost %dus, data3Duration: %d", request.Assigment.RequestId, instanceId, time.Since(start).Microseconds(), len(config.Meta3Duration))
+		// log.Printf("Idle, request id: %s, instance: %s, cost %dus, data3Duration: %d", request.Assigment.RequestId, instanceId, time.Since(start).Microseconds(), len(config.Meta3Duration))
 	}()
 	// jsonStringIdle, _ := json.Marshal(request)
 	// log.Printf("Idle, request: %v", jsonStringIdle)
@@ -471,9 +471,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 }
 
 func (s *Try) deleteSlot(ctx context.Context, requestId, slotId, instanceId, metaKey, reason string) {
-	log.Printf("start delete Instance %s (Slot: %s) of app: %s", instanceId, slotId, metaKey)
+	// log.Printf("start delete Instance %s (Slot: %s) of app: %s", instanceId, slotId, metaKey)
 	if err := s.platformClient.DestroySLot(ctx, requestId, slotId, reason); err != nil {
-		log.Printf("delete Instance %s (Slot: %s) of app: %s failed with: %s", instanceId, slotId, metaKey, err.Error())
+		// log.Printf("delete Instance %s (Slot: %s) of app: %s failed with: %s", instanceId, slotId, metaKey, err.Error())
 		s.mu.Lock()
 		s.curIntanceCnt = s.curIntanceCnt - 1
 		s.mu.Unlock()
@@ -529,9 +529,9 @@ func calScore(s *Try, instance *model.Instance, nowTime int64) {
 	// 冷启动得分
 	s.coldStartTimeScore = (s.invocationExecutionTimeInSecs / s.invocationAllTime) * 50
 	log.Printf(`meta key: %s, invocationExecutionTimeInGBs: %f, totalSlotTimeInGBs: %f, resourceUsageScore: %f,
-	 coldStartTimeScore: %f, invocationExecutionTimeInSecs: %f, invocationAllTime: %f`,
+	 coldStartTimeScore: %f, invocationExecutionTimeInSecs: %f, invocationAllTime: %f, instance.CreateTime: %d, nowTime: %d`,
 		s.metaData.Key, s.invocationExecutionTimeInGBs, s.totalSlotTimeInGBs, s.resourceUsageScore, s.coldStartTimeScore,
-		s.invocationExecutionTimeInSecs, s.invocationAllTime)
+		s.invocationExecutionTimeInSecs, s.invocationAllTime, instance.CreateTime, nowTime)
 }
 
 func (s *Try) Stats() Stats {
