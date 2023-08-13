@@ -382,9 +382,12 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			a = 0.5 * (float64(data3Memory) / float64(data3InitDuration))
 		}
 		// 空闲大于当前qps
-		if lastMinQPS != 0 {
-			d = 0.5 * float64(curIdlePodNums) / float64(lastMinQPS-thisSecondQPS)
+		if lastMinQPS > thisSecondQPS {
+			if lastMinQPS != 0 {
+				d = 0.5 * float64(curIdlePodNums) / float64(lastMinQPS-thisSecondQPS)
+			}
 		}
+
 		// // 空闲大于期望
 		// if balancePodNums != 0 {
 		// 	c = 0.5 * float64(curIdlePodNums/balancePodNums)
@@ -409,7 +412,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		//thresholdD = 0.5
 		//thresholdC = 1.0
 		//}
-		if d >= thresholdD {
+		if a >= thresholdA && d >= thresholdD {
 			needDestroy = true
 		}
 		// } else {
@@ -430,12 +433,12 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	if request.Assigment.MetaKey == "6f83e25d1fad0b50fe5434423db84731f9a166c2" {
 		log.Printf(`Idle, request id: %s, metaKey: %s, s.wrongDecisionCnt: %d, instance: %s, 
 	requestTime: %d,  cur.time: %d, data3Duration: %f, data3InitDuration:%d, 
-	data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, 
+	data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, thisSecondQPS: %d, 
 	balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, directRemoveCnt: %v, 
 	gcRemoveCnt: %v, durationPerPod: %f,request.Result.NeedDestroy: %v, lastNeedDestoryTime: %v, Global wrong descion cnt: %d`,
 			request.Assigment.RequestId, request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId,
 			requestTime, requestTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
-			curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
+			curPodNums2, lastMinQPS, thisSecondQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
 			s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime, config.GM.GlobalWrongDesicionCnt)
 		log.Printf(`score: %f, a: %f, b: %f, c: %f, d: %f, thresholdA: %f, thresholdC: %f, thresholdD: %f`,
 			score, a, b, c, d, thresholdA, thresholdC, thresholdD)
