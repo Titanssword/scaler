@@ -382,9 +382,10 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			a = 0.5 * (float64(data3Memory) / float64(data3InitDuration))
 		}
 		// 空闲大于当前qps
+		delta := 2
 		if lastMinQPS > thisSecondQPS {
 			if lastMinQPS != 0 {
-				d = 0.5 * float64(curIdlePodNums) / float64(lastMinQPS-thisSecondQPS)
+				d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS-thisSecondQPS)+delta)
 			}
 		}
 
