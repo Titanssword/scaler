@@ -413,7 +413,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		//thresholdD = 0.5
 		//thresholdC = 1.0
 		//}
-		if a >= thresholdA && d >= thresholdD {
+		if d >= thresholdD {
 			needDestroy = true
 		}
 		// } else {
