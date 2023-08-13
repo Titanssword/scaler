@@ -315,11 +315,11 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
 		if !needDestroy && idleTime > float32(data3InitDurationMs) {
 			saveCost := (idleTime - float32(data3InitDurationMs)) / 1000.0 * float32(data3MemoryMb) / 1024.0
-			if saveCost > 5 {
+			if saveCost > 1 {
 				needDestroy = true
+				log.Printf("【Idle】metaKey: %s, idleLen: %d, avgQPS: %f, idleTime: %f, initTime: %d, memoryMb %d,saveCost: %f",
+					request.Assigment.MetaKey, s.idleInstance.Len(), avgQPS, idleTime, data3InitDurationMs, data3MemoryMb, saveCost)
 			}
-			log.Printf("【Idle】metaKey: %s, idleLen: %d, avgQPS: %f, idleTime: %f, saveCost: %f, needDestroy: %v",
-				request.Assigment.MetaKey, s.idleInstance.Len(), avgQPS, idleTime, saveCost, needDestroy)
 		}
 		/*
 			如果初始化slot总耗时超过10000秒，则不希望再初始化，needDestroy = false
