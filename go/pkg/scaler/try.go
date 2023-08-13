@@ -341,6 +341,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	var c float64 = 0.0
 	var d float64 = 0.0
 	thresholdD := 0.7
+	thresholdDD := 0.3
 	thresholdC := 0.5
 	thresholdA := 0.5
 	cnt := 0
@@ -395,6 +396,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if d >= thresholdD {
 			needDestroy = true
 		}
+		if d >= thresholdDD && curPodNums > lastMinQPS {
+			needDestroy = true
+		}
 	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
@@ -434,7 +438,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		instance.LastIdleTime = time.Now()
 		if needDestroy {
 			calScore(s, instance, time.Now().Unix())
-			log.Printf("request id %s, instance %s need be destroy, execTime: %d", request.Assigment.RequestId, instanceId, instance.ExecutionTimes)
+			if instance.Meta.Key == LogMetaKey {
+				log.Printf("request id %s, instance %s need be destroy, execTime: %d, instance.ExecutionEndTime: %d, instance.ExecutionStartTime: %d", request.Assigment.RequestId, instanceId, instance.ExecutionTimes, instance.ExecutionEndTime, instance.ExecutionStartTime)
+			}
 			delete(s.instances, instance.Id)
 			return reply, nil
 		}
