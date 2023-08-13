@@ -385,7 +385,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		delta := 2
 		if lastMinQPS > thisSecondQPS {
 			if lastMinQPS != 0 {
-				d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS-thisSecondQPS)+delta)
+				d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS)+delta)
 			}
 		}
 
