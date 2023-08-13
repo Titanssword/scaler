@@ -59,6 +59,8 @@ type Try struct {
 	lastTime            int64
 }
 
+var LogMetaKey = "6f83e25d1fad0b50fe5434423db84731f9a166c2"
+
 func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 	client, err := platform_client.New(c.ClientAddr)
 	if err != nil {
@@ -169,7 +171,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		instance.SchedueTime = time.Now().Unix() - requestTime
 		instance.ExecutionStartTime = time.Now().Unix()
 		s.mu.Unlock()
-		if instance.Meta.Key == "6f83e25d1fad0b50fe5434423db84731f9a166c2" {
+		if instance.Meta.Key == LogMetaKey {
 			log.Printf("Assign, metakey: %s, request id: %s, instance %s reused", request.MetaData.Key, request.RequestId, instance.Id)
 		}
 		instanceId = instance.Id
@@ -231,7 +233,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	instance.SchedueTime = time.Now().Unix() - requestTime
 	instance.CreateTime = requestTime
 	instance.ExecutionStartTime = time.Now().Unix()
-	if instance.Meta.Key == "6f83e25d1fad0b50fe5434423db84731f9a166c2" {
+	if instance.Meta.Key == LogMetaKey {
 		log.Printf(`[create-instance] request id: %s, instance %s for app %s is created, init latency: %dms, 
 	idle len: %d, create s.wrongDecisionCnt: %d, (requestTime - s.lastNeedDestoryTime): %d, s.lastNeedDestoryTime: %d,
 	SchedueTime: %d`,
@@ -338,7 +340,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	var b float64 = 1.0
 	var c float64 = 0.0
 	var d float64 = 0.0
-	thresholdD := 0.4
+	thresholdD := 0.5
 	thresholdC := 0.5
 	thresholdA := 0.5
 	cnt := 0
@@ -382,16 +384,13 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			a = 0.5 * (float64(data3Memory) / float64(data3InitDuration))
 		}
 		// 空闲大于当前qps
-		delta := 1
-		if lastMinQPS > thisSecondQPS {
-			if lastMinQPS != 0 {
-				d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS)+delta)
-			}
+		if lastMinQPS != 0 {
+			d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS))
 		}
 
 		// 修改yuzhi
 		if a > 1 {
-			thresholdD = 0.3
+			thresholdD = 0.4
 		}
 		if d >= thresholdD {
 			needDestroy = true
@@ -406,7 +405,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	} else {
 		s.gcRemoveCnt = s.gcRemoveCnt + 1
 	}
-	if request.Assigment.MetaKey == "6f83e25d1fad0b50fe5434423db84731f9a166c2" {
+	if request.Assigment.MetaKey == LogMetaKey {
 		log.Printf(`Idle, request id: %s, metaKey: %s, s.wrongDecisionCnt: %d, instance: %s, 
 	requestTime: %d,  cur.time: %d, data3Duration: %f, data3InitDuration:%d, 
 	data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, thisSecondQPS: %d, 
@@ -513,7 +512,7 @@ func calScore(s *Try, instance *model.Instance, nowTime int64) {
 	s.invocationAllTime = s.invocationAllTime + allTimePerInstance
 	// 冷启动得分
 	s.coldStartTimeScore = (s.invocationExecutionTimeInSecs / s.invocationAllTime) * 50
-	if instance.Meta.Key == "6f83e25d1fad0b50fe5434423db84731f9a166c2" {
+	if instance.Meta.Key == LogMetaKey {
 		log.Printf(`meta key: %s, invocationExecutionTimeInGBs: %f, totalSlotTimeInGBs: %f, resourceUsageScore: %f,
 	 coldStartTimeScore: %f, invocationExecutionTimeInSecs: %f, invocationAllTime: %f, instance.CreateTime: %d, nowTime: %d`,
 			s.metaData.Key, s.invocationExecutionTimeInGBs, s.totalSlotTimeInGBs, s.resourceUsageScore, s.coldStartTimeScore,
