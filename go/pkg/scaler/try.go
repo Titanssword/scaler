@@ -340,7 +340,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	var b float64 = 1.0
 	var c float64 = 0.0
 	var d float64 = 0.0
-	thresholdD := 0.5
+	thresholdD := 0.6
 	thresholdC := 0.5
 	thresholdA := 0.5
 	cnt := 0
@@ -383,14 +383,14 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if data3Duration != 0 {
 			a = 0.5 * (float64(data3Memory) / float64(data3InitDuration))
 		}
+		delta := 1
 		// 空闲大于当前qps
 		if lastMinQPS != 0 {
-			d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS))
+			d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS)+delta)
 		}
-
 		// 修改yuzhi
 		if a > 1 {
-			thresholdD = 0.35
+			thresholdD = 0.5
 		}
 		if d >= thresholdD {
 			needDestroy = true
