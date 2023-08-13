@@ -154,7 +154,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.mu.Unlock()
 
 	defer func() {
-		log.Printf("Assign, request id: %s, instance id: %s, cost %dms", request.RequestId, instanceId, time.Since(start).Milliseconds())
+		// log.Printf("Assign, request id: %s, instance id: %s, cost %dms", request.RequestId, instanceId, time.Since(start).Milliseconds())
 	}()
 	// log.Printf("Assign, request id: %s", request.RequestId)
 	s.mu.Lock()
@@ -169,7 +169,9 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		instance.SchedueTime = time.Now().Unix() - requestTime
 		instance.ExecutionStartTime = time.Now().Unix()
 		s.mu.Unlock()
-		log.Printf("Assign, metakey: %s, request id: %s, instance %s reused", request.MetaData.Key, request.RequestId, instance.Id)
+		if instance.Meta.Key == "6f83e25d1fad0b50fe5434423db84731f9a166c2" {
+			log.Printf("Assign, metakey: %s, request id: %s, instance %s reused", request.MetaData.Key, request.RequestId, instance.Id)
+		}
 		instanceId = instance.Id
 		return &pb.AssignReply{
 			Status: pb.Status_Ok,
@@ -229,11 +231,13 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	instance.SchedueTime = time.Now().Unix() - requestTime
 	instance.CreateTime = requestTime
 	instance.ExecutionStartTime = time.Now().Unix()
-	log.Printf(`[create-instance] request id: %s, instance %s for app %s is created, init latency: %dms, 
+	if instance.Meta.Key == "6f83e25d1fad0b50fe5434423db84731f9a166c2" {
+		log.Printf(`[create-instance] request id: %s, instance %s for app %s is created, init latency: %dms, 
 	idle len: %d, create s.wrongDecisionCnt: %d, (requestTime - s.lastNeedDestoryTime): %d, s.lastNeedDestoryTime: %d,
 	SchedueTime: %d`,
-		request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs,
-		idleLen, s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime), s.lastNeedDestoryTime, instance.SchedueTime)
+			request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs,
+			idleLen, s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime), s.lastNeedDestoryTime, instance.SchedueTime)
+	}
 	s.mu.Unlock()
 	return &pb.AssignReply{
 		Status: pb.Status_Ok,
@@ -423,18 +427,20 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	} else {
 		s.gcRemoveCnt = s.gcRemoveCnt + 1
 	}
-	log.Printf(`Idle, request id: %s, metaKey: %s, s.wrongDecisionCnt: %d, instance: %s, 
+	if request.Assigment.MetaKey == "6f83e25d1fad0b50fe5434423db84731f9a166c2" {
+		log.Printf(`Idle, request id: %s, metaKey: %s, s.wrongDecisionCnt: %d, instance: %s, 
 	requestTime: %d,  cur.time: %d, data3Duration: %f, data3InitDuration:%d, 
 	data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, 
 	balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, directRemoveCnt: %v, 
 	gcRemoveCnt: %v, durationPerPod: %f,request.Result.NeedDestroy: %v, lastNeedDestoryTime: %v, Global wrong descion cnt: %d`,
-		request.Assigment.RequestId, request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId,
-		requestTime, requestTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
-		curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
-		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime, config.GM.GlobalWrongDesicionCnt)
-	log.Printf(`score: %f, a: %f, b: %f, c: %f, d: %f, thresholdA: %f, thresholdC: %f, thresholdD: %f`,
-		score, a, b, c, d, thresholdA, thresholdC, thresholdD)
-	// s.mu.Unlock()
+			request.Assigment.RequestId, request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId,
+			requestTime, requestTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
+			curPodNums2, lastMinQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
+			s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime, config.GM.GlobalWrongDesicionCnt)
+		log.Printf(`score: %f, a: %f, b: %f, c: %f, d: %f, thresholdA: %f, thresholdC: %f, thresholdD: %f`,
+			score, a, b, c, d, thresholdA, thresholdC, thresholdD)
+		// s.mu.Unlock()
+	}
 	defer func() {
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
@@ -528,10 +534,12 @@ func calScore(s *Try, instance *model.Instance, nowTime int64) {
 	s.invocationAllTime = s.invocationAllTime + allTimePerInstance
 	// 冷启动得分
 	s.coldStartTimeScore = (s.invocationExecutionTimeInSecs / s.invocationAllTime) * 50
-	log.Printf(`meta key: %s, invocationExecutionTimeInGBs: %f, totalSlotTimeInGBs: %f, resourceUsageScore: %f,
+	if instance.Meta.Key == "6f83e25d1fad0b50fe5434423db84731f9a166c2" {
+		log.Printf(`meta key: %s, invocationExecutionTimeInGBs: %f, totalSlotTimeInGBs: %f, resourceUsageScore: %f,
 	 coldStartTimeScore: %f, invocationExecutionTimeInSecs: %f, invocationAllTime: %f, instance.CreateTime: %d, nowTime: %d`,
-		s.metaData.Key, s.invocationExecutionTimeInGBs, s.totalSlotTimeInGBs, s.resourceUsageScore, s.coldStartTimeScore,
-		s.invocationExecutionTimeInSecs, s.invocationAllTime, instance.CreateTime, nowTime)
+			s.metaData.Key, s.invocationExecutionTimeInGBs, s.totalSlotTimeInGBs, s.resourceUsageScore, s.coldStartTimeScore,
+			s.invocationExecutionTimeInSecs, s.invocationAllTime, instance.CreateTime, nowTime)
+	}
 }
 
 func (s *Try) Stats() Stats {
