@@ -59,7 +59,7 @@ type Try struct {
 	lastTime            int64
 }
 
-var LogMetaKey = "6f83e25d1fad0b50fe5434423db84731f9a166c2"
+var LogMetaKey = "8b83a83f41005c20efd27f7c26a6c7768ede8991"
 
 func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 	client, err := platform_client.New(c.ClientAddr)
@@ -390,7 +390,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 
 		// 修改yuzhi
 		if a > 1 {
-			thresholdD = 0.4
+			thresholdD = 0.35
 		}
 		if d >= thresholdD {
 			needDestroy = true
