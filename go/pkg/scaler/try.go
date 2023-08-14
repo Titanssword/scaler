@@ -153,13 +153,10 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
 
-	s.mu.Unlock()
-
 	defer func() {
 		// log.Printf("Assign, request id: %s, instance id: %s, cost %dms", request.RequestId, instanceId, time.Since(start).Milliseconds())
 	}()
 	// log.Printf("Assign, request id: %s", request.RequestId)
-	s.mu.Lock()
 	// element := s.idleInstance.Front()
 	// trsbytes, _ := json.Marshal(element)
 	idleLen := s.idleInstance.Len()
@@ -185,7 +182,6 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 			ErrorMessage: nil,
 		}, nil
 	}
-	s.mu.Unlock()
 
 	//Create new Instance
 	// log.Printf("Assign, metakey: %s, request id: %s, instance %s create new", request.MetaData.Key, request.RequestId)
@@ -216,7 +212,6 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	}
 
 	//add new instance
-	s.mu.Lock()
 	instance.Busy = true
 	s.instances[instance.Id] = instance
 	s.curIntanceCnt = s.curIntanceCnt + 1
@@ -320,6 +315,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// 	}
 	// }
 	// 针对数据集3 做优化
+	s.mu.Lock()
 	data3Duration, ok := config.Meta3Duration[request.Assigment.MetaKey]
 	// dd, _ := json.Marshal(data3Duration)
 	data3Memory := s.memoryInMb
@@ -329,7 +325,6 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// var curQPS int
 	var balancePodNums int
 	requestTime := start.Unix()
-	s.mu.Lock()
 	curPodNums := len(s.instances)
 	// stats := s.Stats()
 	curPodNums2 := s.curIntanceCnt
@@ -396,10 +391,10 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// if d >= thresholdD {
 		// 	needDestroy = true
 		// }
-		if d >= thresholdD {
-			needDestroy = true
-		}
-		if curIdlePodNums > balancePodNums {
+		// if d >= thresholdD {
+		// 	needDestroy = true
+		// }
+		if curIdlePodNums >= balancePodNums && d >= thresholdD {
 			needDestroy = true
 		}
 	}
@@ -430,10 +425,10 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
 		}
+		s.mu.Unlock()
 	}()
 	// log.Printf("Idle, request id: %s", request.Assigment.RequestId)
 	// s.mu.Lock()
-	defer s.mu.Unlock()
 	if instance := s.instances[instanceId]; instance != nil {
 		instance.ExecutionEndTime = requestTime
 		instance.ExecutionTimes = instance.ExecutionTimes + (instance.ExecutionEndTime - instance.ExecutionStartTime)
@@ -467,9 +462,9 @@ func (s *Try) deleteSlot(ctx context.Context, requestId, slotId, instanceId, met
 	// log.Printf("start delete Instance %s (Slot: %s) of app: %s", instanceId, slotId, metaKey)
 	if err := s.platformClient.DestroySLot(ctx, requestId, slotId, reason); err != nil {
 		// log.Printf("delete Instance %s (Slot: %s) of app: %s failed with: %s", instanceId, slotId, metaKey, err.Error())
-		s.mu.Lock()
-		s.curIntanceCnt = s.curIntanceCnt - 1
-		s.mu.Unlock()
+		// s.mu.Lock()
+		// s.curIntanceCnt = s.curIntanceCnt - 1
+		// s.mu.Unlock()
 	}
 }
 
