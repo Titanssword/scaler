@@ -393,7 +393,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if a > 1 {
 			thresholdD = 0.6
 		}
-		if curIdlePodNums > (balancePodNums*3) && curIdlePodNums > (lastMinQPS/2)+2 {
+		if curIdlePodNums >= (balancePodNums * 4) {
 			needDestroy = true
 		}
 	}
