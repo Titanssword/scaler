@@ -63,6 +63,7 @@ type Try struct {
 }
 
 var LogMetaKey = "8b83a83f41005c20efd27f7c26a6c7768ede8991"
+var timeWindow int64 = 10
 
 func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 	client, err := platform_client.New(c.ClientAddr)
@@ -148,12 +149,12 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	}
 
 	// 删除多余元素，位置1min的时间窗口
-	if s.qpsEntityList.Len() > 60 {
+	if s.qpsEntityList.Len() > int(timeWindow) {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
 	// 超出30min，也清除头
 	front := s.qpsEntityList.Front().Value.(*model.QpsEntity)
-	if front.CurrentTime < requestTime-60 {
+	if front.CurrentTime < requestTime-timeWindow {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
 
@@ -188,9 +189,9 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	}
 	if request.MetaData.Key == LogMetaKey {
 		log.Printf(`[create-instance] request id: %s, app %s is created, 
-	idle len: %d, create s.wrongDecisionCnt: %d, (requestTime - s.lastNeedDestoryTime): %d, s.lastNeedDestoryTime: %d,`,
+	idle len: %d, create s.wrongDecisionCnt: %d, (requestTime - s.lastNeedDestoryTime): %d, s.lastNeedDestoryTime: %d, pod nums: %d`,
 			request.RequestId, request.MetaData.Key,
-			idleLen, s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime), s.lastNeedDestoryTime)
+			idleLen, s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime), s.lastNeedDestoryTime, len(s.instances))
 	}
 	s.mu.Unlock()
 
@@ -230,7 +231,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 
 	// 惩罚点, 在允许范围时间内，早删除了实例
 	if s.memoryInMb != 0 && s.durationInit != 0 {
-		if s.lastNeedDestoryTime != 0 && 0 < (requestTime-s.lastNeedDestoryTime) && (requestTime-s.lastNeedDestoryTime) < 5*60*1000 {
+		if s.lastNeedDestoryTime != 0 && 0 < (requestTime-s.lastNeedDestoryTime) && (requestTime-s.lastNeedDestoryTime) < timeWindow*1000 {
 			s.wrongDecisionCnt = s.wrongDecisionCnt + 1
 			config.GM.RW.Lock()
 			config.GM.GlobalWrongDesicionCnt = config.GM.GlobalWrongDesicionCnt + 1
@@ -349,7 +350,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	lastMinQPS := 0
 	for item := s.qpsEntityList.Front(); nil != item; item = item.Next() {
 		cur := item.Value.(*model.QpsEntity)
-		if cur.CurrentTime <= requestTime && cur.CurrentTime > requestTime-60 {
+		if cur.CurrentTime <= requestTime && cur.CurrentTime > requestTime-timeWindow {
 			cnt = cnt + cur.QPS
 		}
 	}
@@ -393,7 +394,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if a > 1 {
 			thresholdD = 0.6
 		}
-		if curIdlePodNums >= (balancePodNums * 5) {
+		if curIdlePodNums >= (balancePodNums + lastMinQPS) {
 			needDestroy = true
 		}
 	}
