@@ -59,7 +59,8 @@ type Try struct {
 	lastTime            int64
 
 	// start time
-	startTime int64
+	startTime        int64
+	maxRunningPodNum int
 }
 
 var LogMetaKey = "8b83a83f41005c20efd27f7c26a6c7768ede8991"
@@ -95,7 +96,8 @@ func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 		coldStartTimeScore:            0,
 		invocationExecutionTimeInSecs: 0,
 		// lastMinQPS:       0,
-		startTime: time.Now().Unix(),
+		startTime:        time.Now().Unix(),
+		maxRunningPodNum: 0,
 	}
 	if ok && ok2 {
 		scheduler.memoryInMb = memory
@@ -394,7 +396,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if a > 1 {
 			thresholdD = 0.6
 		}
-		if curIdlePodNums >= (balancePodNums + lastMinQPS) {
+		if curIdlePodNums > lastMinQPS {
 			needDestroy = true
 		}
 	}
@@ -412,11 +414,11 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	requestTime: %d,  cur.time: %d, data3Duration: %f, data3InitDuration:%d, 
 	data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, thisSecondQPS: %d, 
 	balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, directRemoveCnt: %v, 
-	gcRemoveCnt: %v, durationPerPod: %f,request.Result.NeedDestroy: %v, lastNeedDestoryTime: %v, Global wrong descion cnt: %d`,
+	gcRemoveCnt: %v, durationPerPod: %f,request.Result.NeedDestroy: %v, lastNeedDestoryTime: %v, Global wrong descion cnt: %d, maxRunPodNums: %d`,
 			request.Assigment.RequestId, request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId,
 			requestTime, requestTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
 			curPodNums, lastMinQPS, thisSecondQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
-			s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime, config.GM.GlobalWrongDesicionCnt)
+			s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime, config.GM.GlobalWrongDesicionCnt, s.maxRunningPodNum)
 		log.Printf(`score: %f, a: %f, b: %f, c: %f, d: %f, thresholdA: %f, thresholdC: %f, thresholdD: %f`,
 			score, a, b, c, d, thresholdA, thresholdC, thresholdD)
 		// s.mu.Unlock()
@@ -449,6 +451,12 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		}
 		instance.Busy = false
 		s.idleInstance.PushFront(instance)
+		// 更新最大运行pod数
+		total := len(s.instances)
+		idle := s.idleInstance.Len()
+		if total-idle > s.maxRunningPodNum {
+			s.maxRunningPodNum = total - idle
+		}
 	} else {
 		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("request id %s, instance %s not found", request.Assigment.RequestId, instanceId))
 	}
