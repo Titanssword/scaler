@@ -17,14 +17,15 @@ import (
 	"container/list"
 	"context"
 	"fmt"
+	"log"
+	"sync"
+	"time"
+
 	"github.com/AliyunContainerService/scaler/go/pkg/config"
 	model2 "github.com/AliyunContainerService/scaler/go/pkg/model"
 	platform_client2 "github.com/AliyunContainerService/scaler/go/pkg/platform_client"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"log"
-	"sync"
-	"time"
 
 	pb "github.com/AliyunContainerService/scaler/proto"
 	"github.com/google/uuid"
@@ -152,6 +153,13 @@ func (s *Simple) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleRep
 	}()
 	//log.Printf("Idle, request id: %s", request.Assigment.RequestId)
 	needDestroy := false
+	if request.Assigment.MetaKey == "8b83a83f41005c20efd27f7c26a6c7768ede8991" {
+		if len(s.instances) > 20 && s.idleInstance.Len() > 1 {
+			needDestroy = true
+		}
+		log.Printf("Idle, request id: %s, meta key: %s, len: %d, idle len: %d", request.Assigment.RequestId, request.Assigment.MetaKey, len(s.instances), s.idleInstance.Len())
+	}
+
 	slotId := ""
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
@@ -168,6 +176,7 @@ func (s *Simple) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleRep
 		slotId = instance.Slot.Id
 		instance.LastIdleTime = time.Now()
 		if needDestroy {
+			delete(s.instances, instanceId)
 			log.Printf("request id %s, instance %s need be destroy", request.Assigment.RequestId, instanceId)
 			return reply, nil
 		}
