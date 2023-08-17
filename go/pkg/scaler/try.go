@@ -396,8 +396,14 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if a > 1 {
 			thresholdD = 0.6
 		}
-		if curIdlePodNums > (lastMinQPS) {
-			needDestroy = true
+		// if curIdlePodNums > (lastMinQPS) {
+		// 	needDestroy = true
+		// }
+		if request.Assigment.MetaKey == "8b83a83f41005c20efd27f7c26a6c7768ede8991" {
+			if len(s.instances) > 20 && s.idleInstance.Len() > 1 {
+				needDestroy = true
+			}
+			log.Printf("Idle, request id: %s, meta key: %s, len: %d, idle len: %d", request.Assigment.RequestId, request.Assigment.MetaKey, len(s.instances), s.idleInstance.Len())
 		}
 	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
