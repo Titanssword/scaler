@@ -74,15 +74,15 @@ func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 	log.Printf("New scaler for app: %s is created", metaData.Key)
 
 	if contains(config.GlobalMetaKey1, metaData.Key) {
-		*scheduler.config.IdleDurationBeforeGC = 5 * time.Minute
+		*scheduler.config.IdleDurationBeforeGC = 7 * time.Minute
 	} else if contains(config.GlobalMetaKey2, metaData.Key) {
 		if metaData.MemoryInMb <= 256 {
-			*scheduler.config.IdleDurationBeforeGC = 11 * time.Minute
+			*scheduler.config.IdleDurationBeforeGC = 13 * time.Minute
 		} else {
 			*scheduler.config.IdleDurationBeforeGC = 3 * time.Minute
 		}
 	} else {
-		*scheduler.config.IdleDurationBeforeGC = 10 * time.Minute
+		*scheduler.config.IdleDurationBeforeGC = 10 * time.Second
 	}
 
 	scheduler.wg.Add(1)
@@ -287,60 +287,60 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// 	}
 	// }
 
-	// 针对数据集3 做优化
-	_, ok1 := config.Meta3Duration[request.Assigment.MetaKey]
-	data3MemoryMb, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
-	data3InitDurationMs, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
-
-	var avgSaveCost float32
-	avgQPS := s.GetAvgQPS()
-	if ok1 && ok2 && ok3 && avgQPS > 0 {
-		/*
-			获取初始化总耗时
-		*/
-		var totalInitTimeTmp float32
-		totalLock.RLock()
-		totalInitTimeTmp = totalInitTime
-		totalLock.RUnlock()
-		/*
-			如果空闲实例数，超过了平均QPS，销毁也是情理之中（兜底）
-		*/
-		if float32(s.idleInstance.Len()) >= avgQPS {
-			needDestroy = true
-		}
-		/*
-			如果选择直接销毁，可以节省很多代价，那么就选择销毁
-			前期只要有节省就销毁，中期必须超过节省代价的平均值120%才有销毁的意义，后期超过平均值150%就销毁
-		*/
-		idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
-		if idleTime > float32(data3InitDurationMs) {
-			saveCost := (idleTime - float32(data3InitDurationMs)) / 1000.0 * float32(data3MemoryMb) / 1024.0
-			if totalInitTimeTmp < 2000 {
-				setTotalSave(saveCost)
-				needDestroy = true
-			} else {
-				totalSaveCostTmp, totalSaveTimesTmp := getTotalSave()
-				if totalSaveTimesTmp > 0 {
-					avgSaveCost = totalSaveCostTmp / totalSaveTimesTmp
-				}
-				if totalInitTimeTmp < 6000 && saveCost > avgSaveCost*1.20 {
-					setTotalSave(saveCost)
-					needDestroy = true
-				} else if saveCost > avgSaveCost*1.50 {
-					setTotalSave(saveCost)
-					needDestroy = true
-				}
-			}
-			log.Printf("【Idle】metaKey: %s, idleLen: %d, avgQPS: %f, idleTime: %f, saveCost: %f, avgSaveCost: %f, totalInitTime: %f, needDestroy: %v",
-				request.Assigment.MetaKey, s.idleInstance.Len(), avgQPS, idleTime, saveCost, avgSaveCost, totalInitTimeTmp, needDestroy)
-		}
-		/*
-			如果初始化slot总耗时超过10000秒，则不希望再初始化，needDestroy = false
-		*/
-		if totalInitTimeTmp > 10000 {
-			needDestroy = false
-		}
-	}
+	//// 针对数据集3 做优化
+	//_, ok1 := config.Meta3Duration[request.Assigment.MetaKey]
+	//data3MemoryMb, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
+	//data3InitDurationMs, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
+	//
+	//var avgSaveCost float32
+	//avgQPS := s.GetAvgQPS()
+	//if ok1 && ok2 && ok3 && avgQPS > 0 {
+	//	/*
+	//		获取初始化总耗时
+	//	*/
+	//	var totalInitTimeTmp float32
+	//	totalLock.RLock()
+	//	totalInitTimeTmp = totalInitTime
+	//	totalLock.RUnlock()
+	//	/*
+	//		如果空闲实例数，超过了平均QPS，销毁也是情理之中（兜底）
+	//	*/
+	//	if float32(s.idleInstance.Len()) >= avgQPS {
+	//		needDestroy = true
+	//	}
+	//	/*
+	//		如果选择直接销毁，可以节省很多代价，那么就选择销毁
+	//		前期只要有节省就销毁，中期必须超过节省代价的平均值120%才有销毁的意义，后期超过平均值150%就销毁
+	//	*/
+	//	idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
+	//	if idleTime > float32(data3InitDurationMs) {
+	//		saveCost := (idleTime - float32(data3InitDurationMs)) / 1000.0 * float32(data3MemoryMb) / 1024.0
+	//		if totalInitTimeTmp < 2000 {
+	//			setTotalSave(saveCost)
+	//			needDestroy = true
+	//		} else {
+	//			totalSaveCostTmp, totalSaveTimesTmp := getTotalSave()
+	//			if totalSaveTimesTmp > 0 {
+	//				avgSaveCost = totalSaveCostTmp / totalSaveTimesTmp
+	//			}
+	//			if totalInitTimeTmp < 6000 && saveCost > avgSaveCost*1.20 {
+	//				setTotalSave(saveCost)
+	//				needDestroy = true
+	//			} else if saveCost > avgSaveCost*1.50 {
+	//				setTotalSave(saveCost)
+	//				needDestroy = true
+	//			}
+	//		}
+	//		log.Printf("【Idle】metaKey: %s, idleLen: %d, avgQPS: %f, idleTime: %f, saveCost: %f, avgSaveCost: %f, totalInitTime: %f, needDestroy: %v",
+	//			request.Assigment.MetaKey, s.idleInstance.Len(), avgQPS, idleTime, saveCost, avgSaveCost, totalInitTimeTmp, needDestroy)
+	//	}
+	//	/*
+	//		如果初始化slot总耗时超过10000秒，则不希望再初始化，needDestroy = false
+	//	*/
+	//	if totalInitTimeTmp > 10000 {
+	//		needDestroy = false
+	//	}
+	//}
 
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
