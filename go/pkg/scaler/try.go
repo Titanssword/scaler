@@ -74,11 +74,11 @@ func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 	log.Printf("New scaler for app: %s is created", metaData.Key)
 
 	if contains(config.GlobalMetaKey1, metaData.Key) {
-		*scheduler.config.IdleDurationBeforeGC = 20 * time.Second
+		*scheduler.config.IdleDurationBeforeGC = 16 * time.Second
 	} else if contains(config.GlobalMetaKey2, metaData.Key) {
-		*scheduler.config.IdleDurationBeforeGC = 240 * time.Second
+		*scheduler.config.IdleDurationBeforeGC = 200 * time.Second
 	} else {
-		*scheduler.config.IdleDurationBeforeGC = 13 * time.Second
+		*scheduler.config.IdleDurationBeforeGC = 11 * time.Second
 	}
 
 	scheduler.wg.Add(1)
