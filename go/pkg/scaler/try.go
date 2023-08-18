@@ -76,7 +76,7 @@ func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 	if contains(config.GlobalMetaKey1, metaData.Key) {
 		*scheduler.config.IdleDurationBeforeGC = 16 * time.Second
 	} else if contains(config.GlobalMetaKey2, metaData.Key) {
-		*scheduler.config.IdleDurationBeforeGC = 200 * time.Second
+		*scheduler.config.IdleDurationBeforeGC = 220 * time.Second
 	} else {
 		*scheduler.config.IdleDurationBeforeGC = 11 * time.Second
 	}
