@@ -384,18 +384,18 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 
 		// wrongDesicionCost := 0
 		// s1: 认为后面1s内，该pod不会被再利用
-		if data3Duration != 0 {
-			a = 0.5 * (float64(data3Memory) / float64(data3InitDuration))
-		}
+		// if data3Duration != 0 {
+		// 	a = 0.5 * (float64(data3Memory) / float64(data3InitDuration))
+		// }
 		// delta := 1
 		// // 空闲大于当前qps
 		// if lastMinQPS != 0 {
 		// 	d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS)+delta)
 		// }
 		// 修改yuzhi
-		if a > 1 {
-			thresholdD = 0.6
-		}
+		// if a > 1 {
+		// 	thresholdD = 0.6
+		// }
 		// if curIdlePodNums > (lastMinQPS) {
 		// 	needDestroy = true
 		// }
@@ -424,6 +424,24 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 					}
 				}
 			}
+		}
+		if data3Memory >= data3InitDuration && data3Duration != 0 {
+			a = 0.25 * (float64(data3Memory) / float64(data3InitDuration))
+		}
+		if s.directRemoveCnt != 0 {
+			b = 0.25 * (float64(s.directRemoveCnt) - float64(s.wrongDecisionCnt)) / float64(s.directRemoveCnt)
+		} else {
+			b = 0.25
+		}
+		if curIdlePodNums >= balancePodNums {
+			c = 0.3
+		}
+		if lastMinQPS != 0 {
+			d = 0.3 * float64(curIdlePodNums) / float64(lastMinQPS)
+		}
+		score = a + b + c + d
+		if score >= 1 {
+			needDestroy = true
 		}
 	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
