@@ -408,7 +408,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// if curIdlePodNums > (len(s.instances) / 2) {
 		// 	needDestroy = true
 		// }
-		if data3InitDuration > 4000 {
+		if data3InitDuration < 4000 {
 			if len(s.instances) > s.maxRunningPodNum-1 && curIdlePodNums > (len(s.instances)/2) {
 				needDestroy = true
 			}
