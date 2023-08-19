@@ -405,7 +405,10 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// 	}
 		// 	log.Printf("Idle, request id: %s, meta key: %s, len: %d, idle len: %d", request.Assigment.RequestId, request.Assigment.MetaKey, len(s.instances), s.idleInstance.Len())
 		// }
-		if curIdlePodNums > (len(s.instances) / 2) {
+		// if curIdlePodNums > (len(s.instances) / 2) {
+		// 	needDestroy = true
+		// }
+		if len(s.instances) > s.maxRunningPodNum-1 {
 			needDestroy = true
 		}
 
@@ -433,7 +436,13 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			score, a, b, c, d, thresholdA, thresholdC, thresholdD)
 		// s.mu.Unlock()
 	}
-	log.Printf("maxRunPodNums: %d", s.maxRunningPodNum)
+	// 更新最大运行pod数
+	total := len(s.instances)
+	idle := s.idleInstance.Len()
+	if total-idle > s.maxRunningPodNum {
+		s.maxRunningPodNum = total - idle
+	}
+	log.Printf("metaKey: %s, maxRunPodNums: %d", request.Assigment.MetaKey, s.maxRunningPodNum)
 	defer func() {
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
@@ -462,12 +471,6 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		}
 		instance.Busy = false
 		s.idleInstance.PushFront(instance)
-		// 更新最大运行pod数
-		total := len(s.instances)
-		idle := s.idleInstance.Len()
-		if total-idle > s.maxRunningPodNum {
-			s.maxRunningPodNum = total - idle
-		}
 	} else {
 		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("request id %s, instance %s not found", request.Assigment.RequestId, instanceId))
 	}
