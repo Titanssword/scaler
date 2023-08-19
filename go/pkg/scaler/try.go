@@ -408,23 +408,23 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// if curIdlePodNums > (len(s.instances) / 2) {
 		// 	needDestroy = true
 		// }
-		if data3InitDuration < 4000 {
-			// if len(s.instances) > s.maxRunningPodNum-1 && curIdlePodNums > (len(s.instances)/2)+1 {
-			// 	needDestroy = true
-			// }
-			// if lastMinQPS != 0 && curIdlePodNums > (lastMinQPS/2)+1 {
-			// 	needDestroy = true
-			// }
-			delta := 2
-			if curIdlePodNums > balancePodNums && lastMinQPS > thisSecondQPS {
-				if lastMinQPS > 1 {
-					d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS/2)+delta)
-					if d >= 0.5 {
-						needDestroy = true
-					}
-				}
-			}
-		}
+		// if data3InitDuration < 4000 {
+		// 	// if len(s.instances) > s.maxRunningPodNum-1 && curIdlePodNums > (len(s.instances)/2)+1 {
+		// 	// 	needDestroy = true
+		// 	// }
+		// 	// if lastMinQPS != 0 && curIdlePodNums > (lastMinQPS/2)+1 {
+		// 	// 	needDestroy = true
+		// 	// }
+		// 	delta := 2
+		// 	if curIdlePodNums > balancePodNums && lastMinQPS > thisSecondQPS {
+		// 		if lastMinQPS > 1 {
+		// 			d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS/2)+delta)
+		// 			if d >= 0.5 {
+		// 				needDestroy = true
+		// 			}
+		// 		}
+		// 	}
+		// }
 		if data3Memory >= data3InitDuration && data3Duration != 0 {
 			a = 0.25 * (float64(data3Memory) / float64(data3InitDuration))
 		}
