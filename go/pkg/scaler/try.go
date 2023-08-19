@@ -412,18 +412,18 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			// if len(s.instances) > s.maxRunningPodNum-1 && curIdlePodNums > (len(s.instances)/2)+1 {
 			// 	needDestroy = true
 			// }
-			if lastMinQPS != 0 && curIdlePodNums > (lastMinQPS/2)+1 {
-				needDestroy = true
-			}
-			// delta := 1
-			// if lastMinQPS > thisSecondQPS {
-			// 	if lastMinQPS != 0 {
-			// 		d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS)+delta)
-			// 		if d >= 0.5 {
-			// 			needDestroy = true
-			// 		}
-			// 	}
+			// if lastMinQPS != 0 && curIdlePodNums > (lastMinQPS/2)+1 {
+			// 	needDestroy = true
 			// }
+			delta := 1
+			if lastMinQPS > thisSecondQPS {
+				if lastMinQPS != 0 {
+					d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS)+delta)
+					if d >= 0.5 {
+						needDestroy = true
+					}
+				}
+			}
 		}
 	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
