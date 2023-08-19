@@ -411,7 +411,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if len(s.instances) > s.maxRunningPodNum-1 && curIdlePodNums > (len(s.instances)/2) {
 			needDestroy = true
 		}
-
+		if lastMinQPS != 0 && curIdlePodNums > lastMinQPS/2 {
+			needDestroy = true
+		}
 	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
