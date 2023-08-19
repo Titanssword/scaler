@@ -387,11 +387,11 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if data3Duration != 0 {
 			a = 0.5 * (float64(data3Memory) / float64(data3InitDuration))
 		}
-		delta := 1
-		// 空闲大于当前qps
-		if lastMinQPS != 0 {
-			d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS)+delta)
-		}
+		// delta := 1
+		// // 空闲大于当前qps
+		// if lastMinQPS != 0 {
+		// 	d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS)+delta)
+		// }
 		// 修改yuzhi
 		if a > 1 {
 			thresholdD = 0.6
@@ -413,6 +413,15 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		}
 		if lastMinQPS != 0 && curIdlePodNums > lastMinQPS/2 {
 			needDestroy = true
+		}
+		delta := 2
+		if lastMinQPS > thisSecondQPS {
+			if lastMinQPS != 0 {
+				d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS)+delta)
+				if d > 0.5 {
+					needDestroy = true
+				}
+			}
 		}
 	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
