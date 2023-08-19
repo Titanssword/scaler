@@ -56,13 +56,13 @@ func (m *Manager) GetOrCreate(metaData *model.Meta) scaler.Scaler {
 	// 测试集1 5min
 	_, okk1 := config.Meta1Duration[metaData.Key]
 	if okk1 {
-		newGCTime := time.Duration(5) * time.Minute
+		newGCTime := time.Duration(16) * time.Second
 		m.config.IdleDurationBeforeGC = &newGCTime
 	}
 	// 测试集2 7min
 	_, okk2 := config.Meta2Duration[metaData.Key]
 	if okk2 {
-		newGCTime := time.Duration(7) * time.Minute
+		newGCTime := time.Duration(200) * time.Second
 		m.config.IdleDurationBeforeGC = &newGCTime
 	}
 

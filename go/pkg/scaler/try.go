@@ -415,11 +415,11 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			if lastMinQPS != 0 && curIdlePodNums > lastMinQPS/2 {
 				needDestroy = true
 			}
-			delta := 2
+			delta := 1
 			if lastMinQPS > thisSecondQPS {
 				if lastMinQPS != 0 {
 					d = 0.5 * float64(curIdlePodNums) / float64((lastMinQPS)+delta)
-					if d > 0.5 {
+					if d >= 0.5 {
 						needDestroy = true
 					}
 				}
