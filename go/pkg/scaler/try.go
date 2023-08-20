@@ -415,8 +415,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if data3InitDuration < 4000 &&
 			lastMinQPS >= thisSecondQPS+delta &&
 			curIdlePodNums > balancePodNums &&
-			curIdlePodNums > len(s.instances)/2 &&
-			curIdlePodNums > lastMinQPS/2 &&
+			// curIdlePodNums > len(s.instances)/2 &&
+			curIdlePodNums > (lastMinQPS-thisSecondQPS)+gamma &&
 			len(s.instances) > s.maxRunningPodNum-gamma {
 			needDestroy = true
 		}
