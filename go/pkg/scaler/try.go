@@ -408,11 +408,12 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// if curIdlePodNums > (len(s.instances) / 2) {
 		// 	needDestroy = true
 		// }
+		delta := 2
 		if data3InitDuration < 4000 &&
-			lastMinQPS > thisSecondQPS &&
+			lastMinQPS >= thisSecondQPS &&
 			curIdlePodNums > balancePodNums &&
 			curIdlePodNums > len(s.instances)/2 &&
-			curIdlePodNums > lastMinQPS/2 {
+			curIdlePodNums > lastMinQPS/2+delta {
 			needDestroy = true
 		}
 		// 	delta := 2
