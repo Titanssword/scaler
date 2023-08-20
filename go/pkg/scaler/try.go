@@ -440,9 +440,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			d = 0.3 * float64(curIdlePodNums) / float64(lastMinQPS)
 		}
 		score = a + b + c + d
-		if score >= 1 {
-			needDestroy = true
-		}
+		// if score >= 1 {
+		// 	needDestroy = true
+		// }
 	}
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
