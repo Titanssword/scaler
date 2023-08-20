@@ -61,6 +61,8 @@ type Try struct {
 	// start time
 	startTime        int64
 	maxRunningPodNum int
+	// real balance pod num , according to qps
+	realBalancePodNumRate float64
 }
 
 var LogMetaKey = "8b83a83f41005c20efd27f7c26a6c7768ede8991"
@@ -357,7 +359,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		}
 	}
 
-	lastMinQPS = cnt/s.qpsEntityList.Len() + 1
+	lastMinQPS = cnt / s.qpsEntityList.Len()
 	// 最近一秒的qps
 	thisSecondQPS := 0
 	it := s.qpsEntityList.Front()
