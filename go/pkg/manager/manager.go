@@ -82,9 +82,9 @@ func (m *Manager) GetOrCreate(metaData *model.Meta) scaler.Scaler {
 		//}
 		//}
 		// a := data3InitDuration/data3Memory + 1
-		newGCTime := time.Duration(30) * time.Second
+		newGCTime := time.Duration(20) * time.Second
 		if initDuration < 1000 && memory > 1000 {
-			newGCTime = time.Duration(20) * time.Second
+			newGCTime = time.Duration(10) * time.Second
 		}
 		m.config.IdleDurationBeforeGC = &newGCTime
 	}
