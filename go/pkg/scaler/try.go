@@ -412,7 +412,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// }
 		delta := 3
 		// gamma := 3
-		alpha := 2
+		alpha := 1
 		if data3InitDuration < 4000 &&
 			lastMinQPS >= thisSecondQPS+delta &&
 			curIdlePodNums >= balancePodNums &&
