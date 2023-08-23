@@ -411,7 +411,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// 	needDestroy = true
 		// }
 		delta := 0
-		gamma := 3
+		gamma := 0
 		// alpha := 0
 		if data3InitDuration < 4000 &&
 			lastMinQPS >= thisSecondQPS+delta &&
