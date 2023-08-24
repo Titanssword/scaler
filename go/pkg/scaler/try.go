@@ -61,6 +61,7 @@ type Try struct {
 	// start time
 	startTime        int64
 	maxRunningPodNum int
+	maxQPS           int
 	// real balance pod num , according to qps
 	realBalancePodNumRate float64
 }
@@ -100,6 +101,7 @@ func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 		// lastMinQPS:       0,
 		startTime:        time.Now().Unix(),
 		maxRunningPodNum: 0,
+		maxQPS:           0,
 	}
 	if ok && ok2 {
 		scheduler.memoryInMb = memory
@@ -350,6 +352,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	thresholdC := 0.5
 	thresholdA := 0.5
 	cnt := 0
+	cunMaxPodNum := 0
 	// 最近1分钟的数量
 	lastMinQPS := 0
 	for item := s.qpsEntityList.Front(); nil != item; item = item.Next() {
@@ -410,16 +413,20 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// if curIdlePodNums > (len(s.instances) / 2) {
 		// 	needDestroy = true
 		// }
-		// delta := 0
-		gamma := 3
+		delta := 0
+		gamma := 0
 		// alpha := 0
 		if data3InitDuration < 4000 &&
-			// lastMinQPS >= thisSecondQPS+delta &&
-			curIdlePodNums >= balancePodNums &&
+			lastMinQPS >= thisSecondQPS+delta &&
+			curIdlePodNums >= balancePodNums {
+			if s.maxQPS != 0 {
+				cunMaxPodNum = int(((s.maxRunningPodNum)/(s.maxQPS))*lastMinQPS + 1)
+				if len(s.instances) > cunMaxPodNum-gamma {
+					needDestroy = true
+				}
+			}
 			// curIdlePodNums > len(s.instances)/2 &&
 			// curIdlePodNums >= (lastMinQPS-thisSecondQPS)+alpha {
-			len(s.instances) > s.maxRunningPodNum-gamma {
-			needDestroy = true
 		}
 		// 	delta := 2
 		// 	if curIdlePodNums > balancePodNums && lastMinQPS > thisSecondQPS {
@@ -463,11 +470,11 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		log.Printf(`Idle, request id: %s, metaKey: %s, s.wrongDecisionCnt: %d, instance: %s, 
 	requestTime: %d,  cur.time: %d, data3Duration: %f, data3InitDuration:%d, 
 	data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, thisSecondQPS: %d, 
-	balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, directRemoveCnt: %v, 
+	balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, cunMaxPodNum: %d, directRemoveCnt: %v, 
 	gcRemoveCnt: %v, durationPerPod: %f,request.Result.NeedDestroy: %v, lastNeedDestoryTime: %v, Global wrong descion cnt: %d`,
 			request.Assigment.RequestId, request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId,
 			requestTime, requestTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
-			curPodNums, lastMinQPS, thisSecondQPS, balancePodNums, curIdlePodNums, needDestroy, s.directRemoveCnt,
+			curPodNums, lastMinQPS, thisSecondQPS, balancePodNums, curIdlePodNums, needDestroy, cunMaxPodNum, s.directRemoveCnt,
 			s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime, config.GM.GlobalWrongDesicionCnt)
 		log.Printf(`score: %f, a: %f, b: %f, c: %f, d: %f, thresholdA: %f, thresholdC: %f, thresholdD: %f`,
 			score, a, b, c, d, thresholdA, thresholdC, thresholdD)
@@ -478,8 +485,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	idle := s.idleInstance.Len()
 	if total-idle > s.maxRunningPodNum {
 		s.maxRunningPodNum = total - idle
+		s.maxQPS = lastMinQPS
 	}
-	log.Printf("metaKey: %s, maxRunPodNums: %d", request.Assigment.MetaKey, s.maxRunningPodNum)
+	log.Printf("metaKey: %s, maxRunPodNums: %d, maxQPS: %d", request.Assigment.MetaKey, s.maxRunningPodNum, s.maxQPS)
 	defer func() {
 		if needDestroy {
 			s.deleteSlot(ctx, request.Assigment.RequestId, slotId, instanceId, request.Assigment.MetaKey, "bad instance")
