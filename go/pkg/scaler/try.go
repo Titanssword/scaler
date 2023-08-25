@@ -67,7 +67,7 @@ type Try struct {
 }
 
 var LogMetaKey = "8b83a83f41005c20efd27f7c26a6c7768ede8991"
-var timeWindow int64 = 60
+var timeWindow int64 = 10
 
 func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 	client, err := platform_client.New(c.ClientAddr)
