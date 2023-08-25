@@ -414,10 +414,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// 	needDestroy = true
 		// }
 		delta := 0
-		gamma := 3
+		gamma := 5
 		// alpha := 0
-		if data3InitDuration < 4000 &&
-			lastMinQPS >= thisSecondQPS+delta &&
+		if lastMinQPS >= thisSecondQPS+delta &&
 			curIdlePodNums >= balancePodNums {
 			if s.maxQPS != 0 {
 				cunMaxPodNum = int(((s.maxRunningPodNum)/(s.maxQPS))*lastMinQPS) + 1
