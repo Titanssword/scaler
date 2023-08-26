@@ -297,8 +297,8 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		needDestroy = true
 	}
 
-	//log.Printf("【Idle】metaKey: %s, data3MemoryMb: %d, avgQPS: %f, avgSaveCost: %f, s.idleInstance.Len(): %d, needDestroy: %v",
-	//	request.Assigment.MetaKey, data3MemoryMb, avgQPS, avgSaveCost, s.idleInstance.Len(), needDestroy)
+	log.Printf("【Idle】metaKey: %s, data3MemoryMb: %d, avgQPS: %f, startDurationInMs: %d, processDurationInMs:%d, s.idleInstance.Len(): %d, needDestroy: %v",
+		request.Assigment.MetaKey, memoryMb, avgQPS, startDurationInMs, processDurationInMs, s.idleInstance.Len(), needDestroy)
 
 	defer func() {
 		if needDestroy {
