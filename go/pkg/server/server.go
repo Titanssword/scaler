@@ -32,8 +32,8 @@ type Server struct {
 }
 
 func New() *Server {
-	config.LoadData3Duration()
-	config.LoadData3Memory()
+	//config.LoadData3Duration()
+	//config.LoadData3Memory()
 	return &Server{
 		mgr: manager.New(&config.DefaultConfig),
 	}
