@@ -394,7 +394,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	_, okk1 := config.Meta1Duration[s.metaData.Key]
 	_, okk2 := config.Meta2Duration[s.metaData.Key]
 
-	if (!okk1 || !okk2) && data3Memory != 0 && requestTime-s.startTime > timeWindow+1 && curIdlePodNums > 0 {
+	if (!okk1 || !okk2) && requestTime-s.startTime > timeWindow+1 && curIdlePodNums > 0 {
 		// 初始化时间+执行时间+调用时间
 		// coldAllTime := (data3Duration + float64(data3InitDuration)) + 20
 		// balancePodNums = int(float32(lastMinQPS)/float32(1000/coldAllTime)) + 1
