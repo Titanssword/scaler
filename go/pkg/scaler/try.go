@@ -289,7 +289,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	/*
 		新手保护，60秒内不删除
 	*/
-	if time.Now().UnixMilli()-instance.CreateTimeInMs > 60000 {
+	if time.Now().UnixMilli()-instance.CreateTimeInMs <= 60000 {
 		needDestroy = false
 	}
 
