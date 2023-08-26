@@ -286,6 +286,13 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		}
 	}
 
+	/*
+		新手保护，60秒内不删除
+	*/
+	if time.Now().UnixMilli()-instance.CreateTimeInMs > 60000 {
+		needDestroy = false
+	}
+
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
 		needDestroy = true
 	}
@@ -324,33 +331,33 @@ func (s *Try) GetAvgQPS() float32 {
 	if s.qpsEntityList.Len() < 1 {
 		return 0
 	}
-	cur1 := s.qpsEntityList.Back().Value.(*model.QpsEntity)
-	now := time.Now().Unix()
-	if s.qpsEntityList.Len() == 1 && now == cur1.CurrentTime {
-		return 0
-	}
 
 	var (
 		avgQPSTotal float32 = 0
 		total       float32 = 0
+
+		now = time.Now().Unix()
 	)
-	if now > cur1.CurrentTime {
-		avgQPSTotal += float32(cur1.QPS) / float32(time.Now().Unix()-cur1.CurrentTime)
-		total++
-	}
+
+	cur1 := s.qpsEntityList.Back().Value.(*model.QpsEntity)
+	avgQPSTotal += float32(cur1.QPS) / float32(now-cur1.CurrentTime+1)
+	total++
+
 	if s.qpsEntityList.Len() > 1 {
 		cur2 := s.qpsEntityList.Back().Prev().Value.(*model.QpsEntity)
 		avgQPSTotal += float32(cur2.QPS) / float32(cur1.CurrentTime-cur2.CurrentTime)
 		total++
+
 		if s.qpsEntityList.Len() > 2 {
 			cur3 := s.qpsEntityList.Back().Prev().Prev().Value.(*model.QpsEntity)
 			avgQPSTotal += float32(cur3.QPS) / float32(cur2.CurrentTime-cur3.CurrentTime)
 			total++
-			if s.qpsEntityList.Len() > 3 {
-				cur4 := s.qpsEntityList.Back().Prev().Prev().Prev().Value.(*model.QpsEntity)
-				avgQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
-				total++
-			}
+
+			//if s.qpsEntityList.Len() > 3 {
+			//	cur4 := s.qpsEntityList.Back().Prev().Prev().Prev().Value.(*model.QpsEntity)
+			//	avgQPSTotal += float32(cur4.QPS) / float32(cur3.CurrentTime-cur4.CurrentTime)
+			//	total++
+			//}
 		}
 	}
 
