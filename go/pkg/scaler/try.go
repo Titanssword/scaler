@@ -74,15 +74,11 @@ func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 	log.Printf("New scaler for app: %s is created", metaData.Key)
 
 	if contains(config.GlobalMetaKey1, metaData.Key) {
-		*scheduler.config.IdleDurationBeforeGC = 5 * time.Minute
+		*scheduler.config.IdleDurationBeforeGC = 16 * time.Second
 	} else if contains(config.GlobalMetaKey2, metaData.Key) {
-		if metaData.MemoryInMb <= 256 {
-			*scheduler.config.IdleDurationBeforeGC = 11 * time.Minute
-		} else {
-			*scheduler.config.IdleDurationBeforeGC = 3 * time.Minute
-		}
+		*scheduler.config.IdleDurationBeforeGC = 200 * time.Second
 	} else {
-		*scheduler.config.IdleDurationBeforeGC = 10 * time.Minute
+		*scheduler.config.IdleDurationBeforeGC = 12 * time.Second
 	}
 
 	scheduler.wg.Add(1)
@@ -130,13 +126,13 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 			s.qpsEntityList.PushBack(tmp)
 		}
 	}
-	// 删除多余元素，位置20min的时间窗口
-	if s.qpsEntityList.Len() > 1200 {
+	// 删除多余元素，位置30min的时间窗口
+	if s.qpsEntityList.Len() > 1800 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
-	// 超出20min，也清除头
+	// 超出30min，也清除头
 	front := s.qpsEntityList.Front().Value.(*model.QpsEntity)
-	if front.CurrentTime < requestTime-1200 {
+	if front.CurrentTime < requestTime-1800 {
 		s.qpsEntityList.Remove(s.qpsEntityList.Front())
 	}
 
