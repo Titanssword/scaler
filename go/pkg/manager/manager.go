@@ -53,6 +53,8 @@ func (m *Manager) GetOrCreate(metaData *model.Meta) scaler.Scaler {
 	}
 	log.Printf("Create new scaler for app %s", metaData.Key)
 
+	oldTime := time.Duration(20) * time.Second
+	m.config.IdleDurationBeforeGC = &oldTime
 	// 测试集1 5min
 	_, okk1 := config.Meta1Duration[metaData.Key]
 	if okk1 {

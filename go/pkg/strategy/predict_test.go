@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AliyunContainerService/scaler/pkg/model"
+	"github.com/AliyunContainerService/scaler/go/pkg/model"
 )
 
 func TestArima(t *testing.T) {

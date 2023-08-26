@@ -328,7 +328,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// 	}
 	// }
 	// 针对数据集3 做优化
-	data3Duration, ok := config.Meta3Duration[request.Assigment.MetaKey]
+	data3Duration := config.Meta3Duration[request.Assigment.MetaKey]
 	// dd, _ := json.Marshal(data3Duration)
 	data3Memory := s.memoryInMb
 	data3InitDuration := s.durationInit
@@ -381,8 +381,10 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	// } else {
 	// 	balancePodNums = int(float64(lastMinQPS) * (durationPerPod / 1000))
 	// }
+	_, okk1 := config.Meta1Duration[s.metaData.Key]
+	_, okk2 := config.Meta2Duration[s.metaData.Key]
 
-	if ok && data3Memory != 0 && requestTime-s.startTime > timeWindow+1 && data3InitDuration != 0 && curIdlePodNums > 0 {
+	if (!okk1 || !okk2) && data3Memory != 0 && requestTime-s.startTime > timeWindow+1 && curIdlePodNums > 0 {
 		// 初始化时间+执行时间+调用时间
 		// coldAllTime := (data3Duration + float64(data3InitDuration)) + 20
 		// balancePodNums = int(float32(lastMinQPS)/float32(1000/coldAllTime)) + 1
@@ -413,17 +415,17 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// if curIdlePodNums > (len(s.instances) / 2) {
 		// 	needDestroy = true
 		// }
-		// delta := -3
-		// gamma := 3
+		delta := 3
+		gamma := 2
 		// alpha := 0
-		// if lastMinQPS >= thisSecondQPS+delta &&
-		if curIdlePodNums >= balancePodNums {
-			// if s.maxQPS != 0 {
-			// 	cunMaxPodNum = int(((s.maxRunningPodNum)/(s.maxQPS))*lastMinQPS) + 1
-			// 	if len(s.instances) > cunMaxPodNum-gamma {
-			needDestroy = true
-			// }
-			// }
+		if lastMinQPS >= thisSecondQPS+delta {
+			// if curIdlePodNums >= balancePodNums {
+			if s.maxQPS != 0 {
+				cunMaxPodNum = int(((s.maxRunningPodNum)/(s.maxQPS))*lastMinQPS) + 1
+				if len(s.instances) > cunMaxPodNum-gamma {
+					needDestroy = true
+				}
+			}
 			// curIdlePodNums > len(s.instances)/2 &&
 			// curIdlePodNums >= (lastMinQPS-thisSecondQPS)+alpha {
 		}
