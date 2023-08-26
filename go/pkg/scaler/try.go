@@ -255,7 +255,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("request id %s, instance %s not found", request.Assigment.RequestId, instanceId))
 	}
 
-	memoryMb := instance.Meta.MemoryInMb
+	memoryMb := instance.Slot.ResourceConfig.MemoryInMegabytes
 	startDurationInMs := int64(instance.Slot.CreateDurationInMs) + instance.InitDurationInMs
 	processDurationInMs := time.Now().UnixMilli() - instance.LastIdleTime.UnixMilli()
 
