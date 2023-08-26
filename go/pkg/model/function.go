@@ -42,4 +42,5 @@ type Instance struct {
 type QpsEntity struct {
 	CurrentTime int64
 	QPS         int
+	RunNum      int
 }

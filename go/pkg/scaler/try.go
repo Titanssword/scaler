@@ -28,7 +28,8 @@ type Try struct {
 	idleInstance   *list.List
 	// qpsList        []int64    // qps list
 	// startPoint     int64      // 20230601 1685548800 以来的 1683859454
-	qpsEntityList *list.List // 最近5min的qps，len=60
+	qpsEntityList     *list.List // 最近5min的qps，len=60
+	RunningPodNumList *list.List // 最近窗口期内运行的pod num list
 	// lastMinQPS               // 最近1min qps
 	// qpsEntityMap   map[int64]*model.QpsEntity 1683859454
 	directRemoveCnt int // 越大，资源分越高
@@ -67,7 +68,7 @@ type Try struct {
 }
 
 var LogMetaKey = "8b83a83f41005c20efd27f7c26a6c7768ede8991"
-var timeWindow int64 = 10
+var timeWindow int64 = 60
 
 func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 	client, err := platform_client.New(c.ClientAddr)
@@ -86,9 +87,10 @@ func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 		idleInstance:   list.New(),
 		// qpsList:        make([]int64, 100000000),
 		// startPoint:     1680278400,
-		qpsEntityList:   list.New(),
-		directRemoveCnt: 0,
-		gcRemoveCnt:     0,
+		qpsEntityList:     list.New(),
+		RunningPodNumList: list.New(),
+		directRemoveCnt:   0,
+		gcRemoveCnt:       0,
 		// curIntanceCnt:                 0,
 		wrongDecisionCnt:              0,
 		lastQPS:                       0,
@@ -126,11 +128,13 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	// jsonString, _ := json.Marshal(request)
 	// log.Printf("Assign, request time: %s, request: %s", start, jsonString)
 	s.mu.Lock()
+	runPodNum := len(s.instances) - s.idleInstance.Len()
 	// qps 累加逻辑
 	if s.qpsEntityList.Len() == 0 {
 		tmp := &model.QpsEntity{
 			CurrentTime: requestTime,
 			QPS:         1,
+			RunNum:      runPodNum,
 		}
 		s.qpsEntityList.PushBack(tmp)
 	} else {
@@ -138,10 +142,12 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		if cur != nil {
 			if cur.CurrentTime == requestTime {
 				cur.QPS = cur.QPS + 1
+				cur.RunNum = runPodNum
 			} else {
 				tmp := &model.QpsEntity{
 					CurrentTime: requestTime,
 					QPS:         1,
+					RunNum:      runPodNum,
 				}
 				s.qpsEntityList.PushBack(tmp)
 			}
@@ -149,6 +155,7 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 			tmp := &model.QpsEntity{
 				CurrentTime: requestTime,
 				QPS:         1,
+				RunNum:      runPodNum,
 			}
 			s.qpsEntityList.PushBack(tmp)
 		}
@@ -360,6 +367,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		if cur.CurrentTime <= requestTime && cur.CurrentTime > requestTime-timeWindow {
 			cnt = cnt + cur.QPS
 		}
+		if cur.RunNum > cunMaxPodNum {
+			cunMaxPodNum = cur.RunNum
+		}
 	}
 
 	lastMinQPS = cnt / s.qpsEntityList.Len()
@@ -416,13 +426,15 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// 	needDestroy = true
 		// }
 		delta := 1
-		gamma := 5
+		gamma := 0
 		// alpha := 0
 		if lastMinQPS >= thisSecondQPS+delta {
 			// if curIdlePodNums >= balancePodNums {
 			if s.maxQPS != 0 {
-				cunMaxPodNum = int(((s.maxRunningPodNum)/(s.maxQPS))*lastMinQPS) + 1
-				if len(s.instances) > cunMaxPodNum-gamma && curIdlePodNums > (lastMinQPS-thisSecondQPS) {
+				// cunMaxPodNum = int(((s.maxRunningPodNum)/(s.maxQPS))*lastMinQPS) + 1
+				// cunMaxPodNum = s.maxRunningPodNum
+				// if len(s.instances) > cunMaxPodNum-gamma && curIdlePodNums > (lastMinQPS-thisSecondQPS) {
+				if len(s.instances) >= cunMaxPodNum-gamma {
 					needDestroy = true
 				}
 			}
