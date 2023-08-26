@@ -272,7 +272,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			如果处理的耗时比较短，也不需要过多的实例
 		*/
 		idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
-		if idleTime > float32(processDurationInMs) {
+		if !needDestroy && idleTime > float32(processDurationInMs) {
 			needDestroy = true
 		}
 		/*
@@ -280,7 +280,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		*/
 		if !needDestroy && idleTime > float32(startDurationInMs) {
 			saveCost := (idleTime - float32(startDurationInMs)) / 1000.0 * float32(memoryMb) / 1024.0
-			if saveCost > 1 {
+			if saveCost > 0.5 {
 				needDestroy = true
 			}
 		}
