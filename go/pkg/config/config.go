@@ -14,12 +14,6 @@ limitations under the License.
 package config
 
 import (
-	"bufio"
-	"encoding/json"
-	"fmt"
-	"os"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -41,6 +35,7 @@ var GlobalMetaKey1 = []string{"nodes1", "roles1", "rolebindings1", "certificates
 
 var GlobalMetaKey2 = []string{"nodes2", "roles2", "rolebindings2", "certificatesigningrequests2", "binding2", "csinodes2"}
 
+/*
 var Meta1Duration = map[string]float32{
 	"certificatesigningrequests1": 29.958949,
 	"csinodes1":                   30.000000,
@@ -148,4 +143,4 @@ func LoadData3Memory() {
 	// for key, value := range Meta3Memory {
 	// 	fmt.Printf("%s: %d\n", key, value)
 	// }
-}
+}*/

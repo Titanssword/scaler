@@ -25,6 +25,13 @@ var (
 	totalSaveTimes float32 = 0.0
 )
 
+func setTotalInit(initDurationMs float32) {
+	totalLock.Lock()
+	defer totalLock.Unlock()
+	totalInitTime += initDurationMs
+	totalSaveTimes += 1
+}
+
 func getTotalSave() (float32, float32) {
 	totalLock2.RLock()
 	defer totalLock2.RUnlock()
@@ -197,12 +204,12 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.mu.Unlock()
 	// log.Printf("request id: %s, instance %s for app %s is created, init latency: %dms", request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs)
 
-	// 设置全局初始化时间
-	if data3InitDurationMs, ok := config.Meta3InitDurationMs[request.MetaData.Key]; ok {
-		totalLock.Lock()
-		totalInitTime += float32(data3InitDurationMs) / 1000.0
-		totalLock.Unlock()
-	}
+	//// 设置全局初始化时间
+	//if data3InitDurationMs, ok := config.Meta3InitDurationMs[request.MetaData.Key]; ok {
+	//	totalLock.Lock()
+	//	totalInitTime += float32(data3InitDurationMs) / 1000.0
+	//	totalLock.Unlock()
+	//}
 
 	return &pb.AssignReply{
 		Status: pb.Status_Ok,
@@ -242,62 +249,19 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	needDestroy := false
 	slotId := ""
 
-	// 针对数据集1 做优化
-	// if contains(config.GlobalMetaKey1, request.Assigment.MetaKey) {
-	// 	// 预测qps逻辑
-	// 	// seer := &strategy.Seer{
-	// 	// 	CurrentQPS: s.qpsList[start.Unix()-s.startPoint-60 : start.Unix()-s.startPoint],
-	// 	// }
-	// 	// jsonStringSeer, _ := json.Marshal(seer)
-	// 	// log.Printf("Ilde, seer: %v", jsonStringSeer)
-	// 	// increase := seer.PredictQPSIncrese(ctx)
-	// 	// if !increase && s.idleInstance.Len() > 2 {
-	// 	// 	needDestroy = true
-	// 	// }
-	// 	requestTime := start.Unix()
-	// 	if s.qpsEntityList.Len() != 0 {
-	// 		cur := s.qpsEntityList.Back().Value.(*model.QpsEntity)
-	// 		if cur != nil {
-	// 			if cur.CurrentTime <= requestTime {
-	// 				balancePodNums := cur.QPS / int(1000/config.Meta1Duration[request.Assigment.MetaKey])
-	// 				if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 1 {
-	// 					needDestroy = true
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// }
-	// // 针对数据集2 做优化
-	// if contains(config.GlobalMetaKey2, request.Assigment.MetaKey) {
-	// 	requestTime := start.Unix()
-	// 	if s.qpsEntityList.Len() != 0 {
-	// 		cur := s.qpsEntityList.Back().Value.(*model.QpsEntity)
-	// 		if cur != nil {
-	// 			if cur.CurrentTime <= requestTime {
-	// 				balancePodNums := cur.QPS / int(1000/config.Meta2Duration[request.Assigment.MetaKey])
-	// 				if len(s.instances) >= balancePodNums && s.idleInstance.Len() > 1 {
-	// 					needDestroy = true
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// }
+	// 当前实例
+	instance := s.instances[instanceId]
+	if instance == nil {
+		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("request id %s, instance %s not found", request.Assigment.RequestId, instanceId))
+	}
 
-	// 针对数据集3 做优化
-	_, ok1 := config.Meta3Duration[request.Assigment.MetaKey]
-	data3MemoryMb, ok2 := config.Meta3Memory[request.Assigment.MetaKey]
-	data3InitDurationMs, ok3 := config.Meta3InitDurationMs[request.Assigment.MetaKey]
+	memoryMb := instance.Meta.MemoryInMb
+	startDurationInMs := int64(instance.Slot.CreateDurationInMs) + instance.InitDurationInMs
+	processDurationInMs := time.Now().UnixMilli() - instance.LastIdleTime.UnixMilli()
 
 	//var avgSaveCost float32
 	avgQPS := s.GetAvgQPS()
-	if ok1 && ok2 && ok3 && avgQPS > 0 {
-		/*
-			获取初始化总耗时
-		*/
-		//var totalInitTimeTmp float32
-		//totalLock.RLock()
-		//totalInitTimeTmp = totalInitTime
-		//totalLock.RUnlock()
+	if avgQPS > 0 {
 		/*
 			如果空闲实例数，超过了平均QPS，销毁也是情理之中（兜底）
 		*/
@@ -305,24 +269,21 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			needDestroy = true
 		}
 		/*
-			如果选择直接销毁，可以节省很多代价，那么就选择销毁
-			前期只要有节省就销毁，中期必须超过节省代价的平均值120%才有销毁的意义，后期超过平均值150%就销毁
+			如果处理的耗时比较短，也不需要过多的实例
 		*/
 		idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
-		if !needDestroy && idleTime > float32(data3InitDurationMs) {
-			saveCost := (idleTime - float32(data3InitDurationMs)) / 1000.0 * float32(data3MemoryMb) / 1024.0
-			if saveCost > 1 {
-				needDestroy = true
-				log.Printf("【Idle】metaKey: %s, idleLen: %d, avgQPS: %f, idleTime: %f, initTime: %d, memoryMb %d,saveCost: %f",
-					request.Assigment.MetaKey, s.idleInstance.Len(), avgQPS, idleTime, data3InitDurationMs, data3MemoryMb, saveCost)
-			}
+		if idleTime > float32(processDurationInMs) {
+			needDestroy = true
 		}
 		/*
-			如果初始化slot总耗时超过10000秒，则不希望再初始化，needDestroy = false
+			如果选择直接销毁，可以节省很多代价，那么就选择销毁
 		*/
-		//if totalInitTimeTmp > 10000 {
-		//	needDestroy = false
-		//}
+		if !needDestroy && idleTime > float32(startDurationInMs) {
+			saveCost := (idleTime - float32(startDurationInMs)) / 1000.0 * float32(memoryMb) / 1024.0
+			if saveCost > 1 {
+				needDestroy = true
+			}
+		}
 	}
 
 	if request.Result != nil && request.Result.NeedDestroy != nil && *request.Result.NeedDestroy {
@@ -340,23 +301,19 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if instance := s.instances[instanceId]; instance != nil {
-		slotId = instance.Slot.Id
-		instance.LastIdleTime = time.Now()
-		if needDestroy {
-			// log.Printf("request id %s, instance %s need be destroy", request.Assigment.RequestId, instanceId)
-			return reply, nil
-		}
 
-		if instance.Busy == false {
-			// log.Printf("request id %s, instance %s already freed", request.Assigment.RequestId, instanceId)
-			return reply, nil
-		}
-		instance.Busy = false
-		s.idleInstance.PushFront(instance)
-	} else {
-		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("request id %s, instance %s not found", request.Assigment.RequestId, instanceId))
+	slotId = instance.Slot.Id
+	instance.LastIdleTime = time.Now()
+	if needDestroy {
+		return reply, nil
 	}
+
+	if instance.Busy == false {
+		return reply, nil
+	}
+	instance.Busy = false
+	s.idleInstance.PushFront(instance)
+
 	return &pb.IdleReply{
 		Status:       pb.Status_Ok,
 		ErrorMessage: nil,
