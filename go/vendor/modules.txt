@@ -1,5 +1,6 @@
 # github.com/AliyunContainerService/scaler v0.0.0-20230713130842-5ecd41133879
 ## explicit; go 1.20
+github.com/AliyunContainerService/scaler/pkg/model
 github.com/AliyunContainerService/scaler/proto
 # github.com/golang/protobuf v1.5.3
 ## explicit; go 1.9
