@@ -261,30 +261,30 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 
 	//var avgSaveCost float32
 	avgQPS := s.GetAvgQPS()
-	if avgQPS > 0 {
-		/*
-			如果空闲实例数，超过了平均QPS，销毁也是情理之中（兜底）
-		*/
-		if float32(s.idleInstance.Len()) >= avgQPS {
-			needDestroy = true
-		}
-		/*
-			如果处理的耗时比较短，也不需要过多的实例
-		*/
-		//idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
-		//if !needDestroy && idleTime > float32(processDurationInMs) {
-		//	needDestroy = true
-		//}
-		/*
-			如果选择直接销毁，可以节省很多代价，那么就选择销毁
-		*/
-		//if !needDestroy && idleTime > float32(startDurationInMs) {
-		//	saveCost := (idleTime - float32(startDurationInMs)) / 1000.0 * float32(memoryMb) / 1024.0
-		//	if saveCost > 0.5 {
-		//		needDestroy = true
-		//	}
-		//}
-	}
+	//if avgQPS > 0 {
+	/*
+		如果空闲实例数，超过了平均QPS，销毁也是情理之中（兜底）
+	*/
+	//if float32(s.idleInstance.Len()) >= avgQPS {
+	//	needDestroy = true
+	//}
+	/*
+		如果处理的耗时比较短，也不需要过多的实例
+	*/
+	//idleTime := float32(s.idleInstance.Len()+1) * 1000.0 / avgQPS
+	//if !needDestroy && idleTime > float32(processDurationInMs) {
+	//	needDestroy = true
+	//}
+	/*
+		如果选择直接销毁，可以节省很多代价，那么就选择销毁
+	*/
+	//if !needDestroy && idleTime > float32(startDurationInMs) {
+	//	saveCost := (idleTime - float32(startDurationInMs)) / 1000.0 * float32(memoryMb) / 1024.0
+	//	if saveCost > 0.5 {
+	//		needDestroy = true
+	//	}
+	//}
+	//}
 
 	/*
 		新手保护，60秒内不删除
