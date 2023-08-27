@@ -58,6 +58,7 @@ var Meta1Duration = map[string]float32{
 	"nodes1":                      56.263234,
 	"rolebindings1":               28.868354,
 	"roles1":                      29.578194,
+	"binding1":                    0.00,
 }
 
 var Meta2Duration = map[string]float32{
@@ -66,6 +67,7 @@ var Meta2Duration = map[string]float32{
 	"nodes2":                      56.263234,
 	"rolebindings2":               28.868354,
 	"roles2":                      29.578194,
+	"binding2":                    0.00,
 }
 
 var Meta3Duration map[string]float64
