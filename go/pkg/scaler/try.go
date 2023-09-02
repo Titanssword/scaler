@@ -99,7 +99,6 @@ func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 }
 func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.AssignReply, error) {
 	start := time.Now()
-	instanceId := uuid.New().String()
 
 	// 记录qps，加锁
 	requestTime := start.Unix()
@@ -155,8 +154,6 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		instance.Busy = true
 		s.idleInstance.Remove(element)
 		s.mu.Unlock()
-		//log.Printf("Assign, metakey: %s, request id: %s, instance %s reused", request.MetaData.Key, request.RequestId, instance.Id)
-		instanceId = instance.Id
 		return &pb.AssignReply{
 			Status: pb.Status_Ok,
 			Assigment: &pb.Assignment{
@@ -170,39 +167,16 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.mu.Unlock()
 
 	//Create new Instance
-	resourceConfig := model.SlotResourceConfig{
-		ResourceConfig: pb.ResourceConfig{
-			MemoryInMegabytes: request.MetaData.MemoryInMb,
-		},
-	}
-	slot, err := s.platformClient.CreateSlot(ctx, request.RequestId, &resourceConfig)
+	instance, err := s.createInstance(ctx, request, request.RequestId)
 	if err != nil {
-		errorMessage := fmt.Sprintf("create slot failed with: %s", err.Error())
-		log.Printf(errorMessage)
-		return nil, status.Errorf(codes.Internal, errorMessage)
+		return nil, err
 	}
-
-	meta := &model.Meta{
-		Meta: pb.Meta{
-			Key:           request.MetaData.Key,
-			Runtime:       request.MetaData.Runtime,
-			TimeoutInSecs: request.MetaData.TimeoutInSecs,
-		},
-	}
-	instance, err := s.platformClient.Init(ctx, request.RequestId, instanceId, slot, meta)
-	if err != nil {
-		errorMessage := fmt.Sprintf("create instance failed with: %s", err.Error())
-		log.Printf(errorMessage)
-		return nil, status.Errorf(codes.Internal, errorMessage)
-	}
-	//log.Printf("Assign, metakey: %s, request id: %s, instance %s create new", request.MetaData.Key, request.RequestId, instance.Id)
 
 	//add new instance
 	s.mu.Lock()
 	instance.Busy = true
 	s.instances[instance.Id] = instance
 	s.mu.Unlock()
-	// log.Printf("request id: %s, instance %s for app %s is created, init latency: %dms", request.RequestId, instance.Id, instance.Meta.Key, instance.InitDurationInMs)
 
 	//// 设置全局初始化时间
 	//if data3InitDurationMs, ok := config.Meta3InitDurationMs[request.MetaData.Key]; ok {
@@ -220,6 +194,35 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		},
 		ErrorMessage: nil,
 	}, nil
+}
+
+func (s *Try) createInstance(ctx context.Context, request *pb.AssignRequest, requestId string) (*model.Instance, error) {
+	resourceConfig := model.SlotResourceConfig{
+		ResourceConfig: pb.ResourceConfig{
+			MemoryInMegabytes: request.MetaData.MemoryInMb,
+		},
+	}
+	slot, err := s.platformClient.CreateSlot(ctx, requestId, &resourceConfig)
+	if err != nil {
+		errorMessage := fmt.Sprintf("create slot failed with: %s", err.Error())
+		log.Printf(errorMessage)
+		return nil, status.Errorf(codes.Internal, errorMessage)
+	}
+
+	meta := &model.Meta{
+		Meta: pb.Meta{
+			Key:           request.MetaData.Key,
+			Runtime:       request.MetaData.Runtime,
+			TimeoutInSecs: request.MetaData.TimeoutInSecs,
+		},
+	}
+	instance, err := s.platformClient.Init(ctx, requestId, uuid.New().String(), slot, meta)
+	if err != nil {
+		errorMessage := fmt.Sprintf("create instance failed with: %s", err.Error())
+		log.Printf(errorMessage)
+		return nil, status.Errorf(codes.Internal, errorMessage)
+	}
+	return instance, nil
 }
 
 func contains(arr []string, target string) bool {
