@@ -178,6 +178,25 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 	s.instances[instance.Id] = instance
 	s.mu.Unlock()
 
+	go func() {
+		/*
+			如果 QPS 增长较快，且当前没有空闲实例，则提前创建一个实例
+			后续可以根据 QPS 增加延时，减少资源空转损耗
+		*/
+		if s.idleInstance.Len() == 0 {
+			if _, increase := s.GetAvgQPS(); increase {
+				instance2, err2 := s.createInstance(ctx, request, uuid.New().String())
+				if err2 != nil {
+					return
+				}
+				s.mu.Lock()
+				s.instances[instance2.Id] = instance2
+				s.idleInstance.PushFront(instance2)
+				s.mu.Unlock()
+			}
+		}
+	}()
+
 	//// 设置全局初始化时间
 	//if data3InitDurationMs, ok := config.Meta3InitDurationMs[request.MetaData.Key]; ok {
 	//	totalLock.Lock()
@@ -263,7 +282,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	processDurationInMs := time.Now().UnixMilli() - instance.LastIdleTime.UnixMilli()
 
 	//var avgSaveCost float32
-	avgQPS := s.GetAvgQPS()
+	avgQPS, _ := s.GetAvgQPS()
 	//if avgQPS > 0 {
 	/*
 		如果空闲实例数，超过了平均QPS，销毁也是情理之中（兜底）
@@ -330,16 +349,17 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	}, nil
 }
 
-func (s *Try) GetAvgQPS() float32 {
+func (s *Try) GetAvgQPS() (float32, bool) {
 	if s.qpsEntityList.Len() < 1 {
-		return 0
+		return 0, false
 	}
 
 	var (
 		avgQPSTotal float32 = 0
 		total       float32 = 0
 
-		now = time.Now().Unix()
+		now      = time.Now().Unix()
+		increase = false
 	)
 
 	cur1 := s.qpsEntityList.Back().Value.(*model.QpsEntity)
@@ -347,9 +367,14 @@ func (s *Try) GetAvgQPS() float32 {
 	total++
 
 	if s.qpsEntityList.Len() > 1 {
+		qpsBefore := avgQPSTotal / total
+
 		cur2 := s.qpsEntityList.Back().Prev().Value.(*model.QpsEntity)
 		avgQPSTotal += float32(cur2.QPS) / float32(cur1.CurrentTime-cur2.CurrentTime)
 		total++
+
+		qpsAfter := avgQPSTotal / total
+		increase = qpsBefore > qpsAfter
 
 		if s.qpsEntityList.Len() > 2 {
 			cur3 := s.qpsEntityList.Back().Prev().Prev().Value.(*model.QpsEntity)
@@ -364,7 +389,7 @@ func (s *Try) GetAvgQPS() float32 {
 		}
 	}
 
-	return avgQPSTotal / total
+	return avgQPSTotal / total, increase
 }
 
 func (s *Try) deleteSlot(ctx context.Context, requestId, slotId, instanceId, metaKey, reason string) {
