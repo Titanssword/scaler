@@ -426,7 +426,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// 	needDestroy = true
 		// }
 		delta := 2
-		gamma := 1
+		gamma := 0
 		// alpha := 0
 		if lastMinQPS >= thisSecondQPS {
 			// if curIdlePodNums >= balancePodNums {
@@ -437,6 +437,10 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 				if len(s.instances) >= cunMaxPodNum-gamma && curIdlePodNums > (lastMinQPS-thisSecondQPS)+delta {
 					needDestroy = true
 				}
+			}
+			// 小实例可以再激进一些
+			if s.memoryInMb > s.durationInit && len(s.instances) >= cunMaxPodNum-1 && curIdlePodNums > (lastMinQPS-thisSecondQPS) {
+				needDestroy = true
 			}
 			// if curIdlePodNums >= lastMinQPS {
 			// 	needDestroy = true
