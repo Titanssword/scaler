@@ -378,7 +378,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	it := s.qpsEntityList.Front()
 	if it != nil {
 		qpsentity := it.Value.(*model.QpsEntity)
-		if qpsentity.CurrentTime <= requestTime {
+		if qpsentity.CurrentTime == requestTime {
 			thisSecondQPS = qpsentity.QPS
 		}
 	}
@@ -425,7 +425,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// if curIdlePodNums > (len(s.instances) / 2) {
 		// 	needDestroy = true
 		// }
-		delta := 2
+		delta := 5
 		gamma := 0
 		// alpha := 0
 		if lastMinQPS >= thisSecondQPS {
@@ -434,14 +434,14 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 				// cunMaxPodNum = int(((s.maxRunningPodNum)/(s.maxQPS))*lastMinQPS) + 1
 				// cunMaxPodNum = s.maxRunningPodNum
 				// if len(s.instances) > cunMaxPodNum-gamma && curIdlePodNums > (lastMinQPS-thisSecondQPS) {
-				if len(s.instances) >= cunMaxPodNum-gamma && curIdlePodNums > (lastMinQPS-thisSecondQPS)+delta {
+				if len(s.instances) > cunMaxPodNum+gamma && curIdlePodNums >= (lastMinQPS-thisSecondQPS)+delta {
 					needDestroy = true
 				}
 			}
-			// 小实例可以再激进一些
-			if s.memoryInMb > s.durationInit && len(s.instances) >= cunMaxPodNum-1 && curIdlePodNums > (lastMinQPS-thisSecondQPS) {
-				needDestroy = true
-			}
+			// // 小实例可以再激进一些
+			// if s.memoryInMb > s.durationInit && len(s.instances) >= cunMaxPodNum && curIdlePodNums > (lastMinQPS-thisSecondQPS) {
+			// 	needDestroy = true
+			// }
 			// if curIdlePodNums >= lastMinQPS {
 			// 	needDestroy = true
 			// }
