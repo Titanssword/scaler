@@ -433,7 +433,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			if s.maxQPS != 0 {
 				// cunMaxPodNum = int(((s.maxRunningPodNum)/(s.maxQPS))*lastMinQPS) + 1
 				// cunMaxPodNum = s.maxRunningPodNum
-				if len(s.instances) > cunMaxPodNum-gamma && curIdlePodNums > lastMinQPS/3 {
+				if len(s.instances) > cunMaxPodNum-gamma && curIdlePodNums > int(float64(len(s.instances))*float64(0.5)) {
 					needDestroy = true
 				}
 			}
