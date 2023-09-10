@@ -68,7 +68,7 @@ type Try struct {
 }
 
 var LogMetaKey = "8b83a83f41005c20efd27f7c26a6c7768ede8991"
-var timeWindow int64 = 60
+var timeWindow int64 = 180
 
 func NewV2(metaData *model.Meta, c *config.Config) Scaler {
 	client, err := platform_client.New(c.ClientAddr)
@@ -186,9 +186,9 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 		instance.SchedueTime = time.Now().Unix() - requestTime
 		instance.ExecutionStartTime = time.Now().Unix()
 		s.mu.Unlock()
-		if instance.Meta.Key == LogMetaKey {
-			log.Printf("Assign, metakey: %s, request id: %s, instance %s reused", request.MetaData.Key, request.RequestId, instance.Id)
-		}
+		// if instance.Meta.Key == LogMetaKey {
+		log.Printf("Assign, metakey: %s, request id: %s, instance %s reused", request.MetaData.Key, request.RequestId, instance.Id)
+		// }
 		instanceId = instance.Id
 		return &pb.AssignReply{
 			Status: pb.Status_Ok,
@@ -200,12 +200,12 @@ func (s *Try) Assign(ctx context.Context, request *pb.AssignRequest) (*pb.Assign
 			ErrorMessage: nil,
 		}, nil
 	}
-	if request.MetaData.Key == LogMetaKey {
-		log.Printf(`[create-instance] request id: %s, app %s is created, 
+	// if request.MetaData.Key == LogMetaKey {
+	log.Printf(`[create-instance] request id: %s, app %s is created, 
 	idle len: %d, create s.wrongDecisionCnt: %d, (requestTime - s.lastNeedDestoryTime): %d, s.lastNeedDestoryTime: %d, pod nums: %d`,
-			request.RequestId, request.MetaData.Key,
-			idleLen, s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime), s.lastNeedDestoryTime, len(s.instances))
-	}
+		request.RequestId, request.MetaData.Key,
+		idleLen, s.wrongDecisionCnt, (requestTime - s.lastNeedDestoryTime), s.lastNeedDestoryTime, len(s.instances))
+	// }
 	s.mu.Unlock()
 
 	//Create new Instance
@@ -434,7 +434,6 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 				// cunMaxPodNum = int(((s.maxRunningPodNum)/(s.maxQPS))*lastMinQPS) + 1
 				// cunMaxPodNum = s.maxRunningPodNum
 				// if len(s.instances) > cunMaxPodNum-gamma && curIdlePodNums > (lastMinQPS-thisSecondQPS) {
-				if len(s.instances) > cunMaxPodNum+gamma && curIdlePodNums >= (lastMinQPS-thisSecondQPS)+delta {
 					needDestroy = true
 				}
 			}
@@ -448,6 +447,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 			// curIdlePodNums > len(s.instances)/2 &&
 			// curIdlePodNums >= (lastMinQPS-thisSecondQPS)+alpha {
 		}
+		log.Printf("[need destroy: %d]: len: %d,cunMaxPodNum: %d, lastMinQPS: %d, thisSecondQPS: %d ", needDestroy, len(s.instances), cunMaxPodNum, lastMinQPS, thisSecondQPS)
 		// 	delta := 2
 		// 	if curIdlePodNums > balancePodNums && lastMinQPS > thisSecondQPS {
 		// 		if lastMinQPS > 1 {
@@ -486,20 +486,20 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	} else {
 		s.gcRemoveCnt = s.gcRemoveCnt + 1
 	}
-	if request.Assigment.MetaKey == LogMetaKey {
-		log.Printf(`Idle, request id: %s, metaKey: %s, s.wrongDecisionCnt: %d, instance: %s, 
+	// if request.Assigment.MetaKey == LogMetaKey {
+	log.Printf(`Idle, request id: %s, metaKey: %s, s.wrongDecisionCnt: %d, instance: %s, 
 	requestTime: %d,  cur.time: %d, data3Duration: %f, data3InitDuration:%d, 
 	data3Memory: %d, instance len: %d, instance len2: %d, lastMinQPS qps: %d, thisSecondQPS: %d, 
 	balancePodNums: %d, s.idleInstance.Len(): %d,  needDestroy: %v, cunMaxPodNum: %d, directRemoveCnt: %v, 
 	gcRemoveCnt: %v, durationPerPod: %f,request.Result.NeedDestroy: %v, lastNeedDestoryTime: %v, Global wrong descion cnt: %d`,
-			request.Assigment.RequestId, request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId,
-			requestTime, requestTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
-			curPodNums, lastMinQPS, thisSecondQPS, balancePodNums, curIdlePodNums, needDestroy, cunMaxPodNum, s.directRemoveCnt,
-			s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime, config.GM.GlobalWrongDesicionCnt)
-		log.Printf(`score: %f, a: %f, b: %f, c: %f, d: %f, thresholdA: %f, thresholdC: %f, thresholdD: %f`,
-			score, a, b, c, d, thresholdA, thresholdC, thresholdD)
-		// s.mu.Unlock()
-	}
+		request.Assigment.RequestId, request.Assigment.MetaKey, s.wrongDecisionCnt, request.Assigment.InstanceId,
+		requestTime, requestTime, data3Duration, data3InitDuration, data3Memory, curPodNums,
+		curPodNums, lastMinQPS, thisSecondQPS, balancePodNums, curIdlePodNums, needDestroy, cunMaxPodNum, s.directRemoveCnt,
+		s.gcRemoveCnt, durationPerPod, *request.Result.NeedDestroy, s.lastNeedDestoryTime, config.GM.GlobalWrongDesicionCnt)
+	log.Printf(`score: %f, a: %f, b: %f, c: %f, d: %f, thresholdA: %f, thresholdC: %f, thresholdD: %f`,
+		score, a, b, c, d, thresholdA, thresholdC, thresholdD)
+	// s.mu.Unlock()
+	// }
 	// 更新最大运行pod数
 	total := len(s.instances)
 	idle := s.idleInstance.Len()
@@ -523,9 +523,9 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		instance.LastIdleTime = time.Now()
 		if needDestroy {
 			calScore(s, instance, time.Now().Unix())
-			if instance.Meta.Key == LogMetaKey {
-				log.Printf("request id %s, instance %s need be destroy, execTime: %d, instance.ExecutionEndTime: %d, instance.ExecutionStartTime: %d", request.Assigment.RequestId, instanceId, instance.ExecutionTimes, instance.ExecutionEndTime, instance.ExecutionStartTime)
-			}
+			// if instance.Meta.Key == LogMetaKey {
+			log.Printf("request id %s, instance %s need be destroy, execTime: %d, instance.ExecutionEndTime: %d, instance.ExecutionStartTime: %d", request.Assigment.RequestId, instanceId, instance.ExecutionTimes, instance.ExecutionEndTime, instance.ExecutionStartTime)
+			// }
 			delete(s.instances, instance.Id)
 			return reply, nil
 		}
@@ -603,12 +603,12 @@ func calScore(s *Try, instance *model.Instance, nowTime int64) {
 	s.invocationAllTime = s.invocationAllTime + allTimePerInstance
 	// 冷启动得分
 	s.coldStartTimeScore = (s.invocationExecutionTimeInSecs / s.invocationAllTime) * 50
-	if instance.Meta.Key == LogMetaKey {
-		log.Printf(`meta key: %s, invocationExecutionTimeInGBs: %f, totalSlotTimeInGBs: %f, resourceUsageScore: %f,
+	// if instance.Meta.Key == LogMetaKey {
+	log.Printf(`meta key: %s, invocationExecutionTimeInGBs: %f, totalSlotTimeInGBs: %f, resourceUsageScore: %f,
 	 coldStartTimeScore: %f, invocationExecutionTimeInSecs: %f, invocationAllTime: %f, instance.CreateTime: %d, nowTime: %d`,
-			s.metaData.Key, s.invocationExecutionTimeInGBs, s.totalSlotTimeInGBs, s.resourceUsageScore, s.coldStartTimeScore,
-			s.invocationExecutionTimeInSecs, s.invocationAllTime, instance.CreateTime, nowTime)
-	}
+		s.metaData.Key, s.invocationExecutionTimeInGBs, s.totalSlotTimeInGBs, s.resourceUsageScore, s.coldStartTimeScore,
+		s.invocationExecutionTimeInSecs, s.invocationAllTime, instance.CreateTime, nowTime)
+	// }
 }
 
 func (s *Try) Stats() Stats {
