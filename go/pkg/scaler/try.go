@@ -394,6 +394,7 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 	_, okk1 := config.Meta1Duration[s.metaData.Key]
 	_, okk2 := config.Meta2Duration[s.metaData.Key]
 
+	// if request.GetAssigment().GetMetaKey()
 	if (!okk1 || !okk2) && requestTime-s.startTime > timeWindow+1 && curIdlePodNums > 0 {
 		// 初始化时间+执行时间+调用时间
 		// coldAllTime := (data3Duration + float64(data3InitDuration)) + 20
@@ -426,14 +427,15 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// 	needDestroy = true
 		// }
 		// delta := 3
-		gamma := 0
+		// gamma := 0
 		// alpha := 0
 		if lastMinQPS >= thisSecondQPS {
 			// if curIdlePodNums >= balancePodNums {
 			if s.maxQPS != 0 {
 				// cunMaxPodNum = int(((s.maxRunningPodNum)/(s.maxQPS))*lastMinQPS) + 1
 				// cunMaxPodNum = s.maxRunningPodNum
-				if len(s.instances) > cunMaxPodNum-gamma && curIdlePodNums > int(float64(len(s.instances))*float64(0.5)) {
+				// if len(s.instances) > cunMaxPodNum-gamma && curIdlePodNums > int(float64(len(s.instances))*float64(0.5)) {
+				if len(s.instances) > cunMaxPodNum+1 {
 					needDestroy = true
 				}
 			}
