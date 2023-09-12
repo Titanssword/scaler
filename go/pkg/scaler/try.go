@@ -431,14 +431,14 @@ func (s *Try) Idle(ctx context.Context, request *pb.IdleRequest) (*pb.IdleReply,
 		// alpha := 0
 		if lastMinQPS >= thisSecondQPS {
 			// if curIdlePodNums >= balancePodNums {
-			if s.maxQPS != 0 {
-				// cunMaxPodNum = int(((s.maxRunningPodNum)/(s.maxQPS))*lastMinQPS) + 1
-				// cunMaxPodNum = s.maxRunningPodNum
-				// if len(s.instances) > cunMaxPodNum-gamma && curIdlePodNums > int(float64(len(s.instances))*float64(0.5)) {
-				if len(s.instances) > cunMaxPodNum+1 {
-					needDestroy = true
-				}
+			// if s.maxQPS != 0 {
+			// cunMaxPodNum = int(((s.maxRunningPodNum)/(s.maxQPS))*lastMinQPS) + 1
+			// cunMaxPodNum = s.maxRunningPodNum
+			// if len(s.instances) > cunMaxPodNum-gamma && curIdlePodNums > int(float64(len(s.instances))*float64(0.5)) {
+			if len(s.instances) > cunMaxPodNum+2 {
+				needDestroy = true
 			}
+			// }
 			// // 小实例可以再激进一些
 			// if s.memoryInMb > s.durationInit && len(s.instances) >= cunMaxPodNum && curIdlePodNums > (lastMinQPS-thisSecondQPS) {
 			// 	needDestroy = true
